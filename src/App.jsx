@@ -4,7 +4,7 @@ import { Upload, FileText, Download, Home, DollarSign, Users, AlertCircle, Check
 // Import utilities
 import { findBestMatch, getConfidenceLabel, needsConfirmation } from './utils/fuzzyMatching';
 import { validateExpenseAmount, checkDuplicateExpense, validateBulkRow, formatDate, parseDateToISO } from './utils/validation';
-import { downloadExcelTemplate, downloadMasterDataLists, exportExpenses, exportMasterData, parseCSVData, generateId, generateJournalNumber } from './utils/exportUtils';
+import { downloadExpenseTemplate, downloadVendorTemplate, downloadEmployeeTemplate, downloadMasterDataLists, exportExpenses, exportMasterData, parseCSVData, generateId, generateJournalNumber } from './utils/exportUtils';
 import { saveToStorage, loadFromStorage } from './utils/storage';
 import { CONFIG, INITIAL_VENDORS, DEFAULT_USER } from './config/constants';
 
@@ -1230,123 +1230,6 @@ Return ONLY this JSON:
                 )}
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Bulk Upload View */}
-        {currentView === 'bulkupload' && (
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">Bulk Excel Upload</h2>
-              <button
-                onClick={() => { setShowBulkUpload(false); setBulkUploadResults(null); }}
-                className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
-                ← Back
-              </button>
-            </div>
-            
-            <div className="space-y-4 mb-6">
-              <div className="flex gap-4">
-                <button
-                  onClick={() => downloadExcelTemplate(masterData)}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                >
-                  <Download size={20} />
-                  Download Expense Template
-                </button>
-                <button
-                  onClick={() => downloadMasterDataLists(masterData)}
-                  className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                >
-                  <List size={20} />
-                  Download Reference Lists
-                </button>
-              </div>
-              
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleBulkUpload}
-                  className="hidden"
-                  id="bulk-upload"
-                />
-                <label
-                  htmlFor="bulk-upload"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 cursor-pointer transition"
-                >
-                  <Upload size={20} />
-                  Upload Excel/CSV File
-                </label>
-                <p className="text-xs text-gray-500 mt-2">CSV format, max 1000 rows</p>
-              </div>
-            </div>
-            
-            {bulkUploadResults && (
-              <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h3 className="font-bold text-blue-900 mb-2">Upload Results</h3>
-                  <div className="grid md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-blue-700">Total Rows: <strong>{bulkUploadResults.total}</strong></p>
-                    </div>
-                    <div>
-                      <p className="text-green-700">Valid: <strong>{bulkUploadResults.valid.length}</strong></p>
-                    </div>
-                    <div>
-                      <p className="text-orange-700">Warnings: <strong>{bulkUploadResults.warnings.length}</strong></p>
-                    </div>
-                    {bulkUploadResults.errors.length > 0 && (
-                      <div>
-                        <p className="text-red-700">Errors: <strong>{bulkUploadResults.errors.length}</strong></p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                {bulkUploadResults.errors.length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <h4 className="font-bold text-red-800 mb-2">Errors (Fix These)</h4>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {bulkUploadResults.errors.map((err, idx) => (
-                        <div key={idx} className="text-sm text-red-700">
-                          <p className="font-semibold">Row {err.row}: {err.data['Payee Name']}</p>
-                          <ul className="list-disc list-inside ml-4">
-                            {err.errors.map((e, i) => <li key={i}>{e}</li>)}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {bulkUploadResults.warnings.length > 0 && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                    <h4 className="font-bold text-orange-800 mb-2">Warnings (Review These)</h4>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {bulkUploadResults.warnings.map((warn, idx) => (
-                        <div key={idx} className="text-sm text-orange-700">
-                          <p className="font-semibold">Row {warn.row}: {warn.data['Payee Name']} - ₹{warn.data['Amount']}</p>
-                          <ul className="list-disc list-inside ml-4">
-                            {warn.warnings.map((w, i) => <li key={i}>{w}</li>)}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {(bulkUploadResults.valid.length > 0 || bulkUploadResults.warnings.length > 0) && (
-                  <button
-                    onClick={importBulkExpenses}
-                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg hover:from-purple-700 hover:to-pink-700 transition font-semibold"
-                  >
-                    Import {bulkUploadResults.valid.length + bulkUploadResults.warnings.length} Expenses
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         )}
 
