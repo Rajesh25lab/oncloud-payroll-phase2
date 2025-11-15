@@ -339,7 +339,7 @@ function App() {
       const row = item.data;
       const config = CONFIG.expenseTypes[row['Type']] || CONFIG.expenseTypes['Other'];
       
-      let payeeName = row['Payee Name'];
+      let payeeName = row['Payee Name'] || row['Payee/Vendor'] || row['Payee'];
       let payeeId = '';
       let bankName = '';
       let ifsc = '';
@@ -395,8 +395,132 @@ function App() {
     
     setExpenses([...expenses, ...newExpenses]);
     setBulkUploadResults(null);
-    setShowBulkUpload(false);
     alert(`✅ Imported ${newExpenses.length} expenses successfully!`);
+  };
+
+  // Handle bulk vendor import
+  const handleVendorImport = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+      const text = await file.text();
+      const data = parseCSVData(text);
+      
+      if (data.length === 0) {
+        setErrors(['No data found in file']);
+        return;
+      }
+      
+      const newVendors = { ...masterData.vendors };
+      let importCount = 0;
+      const errors = [];
+      
+      data.forEach((row, idx) => {
+        const vendorName = row['Vendor Name'];
+        const bankName = row['Bank Name'];
+        const ifsc = row['IFSC Code'];
+        const accountNo = row['Account Number'];
+        
+        if (!vendorName || !bankName || !ifsc || !accountNo) {
+          errors.push(`Row ${idx + 2}: Missing required fields`);
+          return;
+        }
+        
+        const vendorId = generateId('VEN');
+        newVendors[vendorId] = {
+          id: vendorId,
+          name: vendorName,
+          bank: bankName,
+          ifsc: ifsc.toUpperCase(),
+          accountNo: accountNo,
+          branch: row['Branch'] || '',
+          status: row['Status'] || 'Active',
+          type: 'vendor',
+          addedDate: new Date().toISOString(),
+          source: 'bulk_import'
+        };
+        importCount++;
+      });
+      
+      if (errors.length > 0) {
+        setErrors(errors);
+        return;
+      }
+      
+      setMasterData({ ...masterData, vendors: newVendors });
+      setErrors([]);
+      alert(`✅ Imported ${importCount} vendors successfully!`);
+      
+    } catch (error) {
+      setErrors([`Error importing vendors: ${error.message}`]);
+    }
+  };
+
+  // Handle bulk employee import
+  const handleEmployeeImport = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+      const text = await file.text();
+      const data = parseCSVData(text);
+      
+      if (data.length === 0) {
+        setErrors(['No data found in file']);
+        return;
+      }
+      
+      const newEmployees = { ...masterData.employees };
+      let importCount = 0;
+      const errors = [];
+      
+      data.forEach((row, idx) => {
+        const empId = row['Emp ID'];
+        const name = row['Name'];
+        const bankName = row['Bank Name'];
+        const ifsc = row['IFSC Code'];
+        const accountNo = row['Account Number'];
+        
+        if (!empId || !name || !bankName || !ifsc || !accountNo) {
+          errors.push(`Row ${idx + 2}: Missing required fields`);
+          return;
+        }
+        
+        if (!empId.startsWith('E')) {
+          errors.push(`Row ${idx + 2}: Emp ID must start with 'E' (example: E0001)`);
+          return;
+        }
+        
+        newEmployees[empId] = {
+          empId: empId,
+          name: name,
+          type: 'employee',
+          department: row['Department'] || '',
+          designation: row['Designation'] || '',
+          bankName: bankName,
+          ifsc: ifsc.toUpperCase(),
+          accountNo: accountNo,
+          branch: row['Branch'] || '',
+          accountType: row['Account Type'] || '',
+          addedDate: new Date().toISOString(),
+          source: 'bulk_import'
+        };
+        importCount++;
+      });
+      
+      if (errors.length > 0) {
+        setErrors(errors);
+        return;
+      }
+      
+      setMasterData({ ...masterData, employees: newEmployees });
+      setErrors([]);
+      alert(`✅ Imported ${importCount} employees successfully!`);
+      
+    } catch (error) {
+      setErrors([`Error importing employees: ${error.message}`]);
+    }
   };
 
   // AI Receipt Reading
@@ -656,20 +780,11 @@ Return ONLY this JSON:
             <button
               onClick={() => { setCurrentView('expenses'); setShowBulkUpload(false); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                currentView === 'expenses' && !showBulkUpload ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
+                currentView === 'expenses' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
               }`}
             >
               <Receipt size={18} />
               Expenses ({stats.pendingExpenses})
-            </button>
-            <button
-              onClick={() => { setCurrentView('bulkupload'); setShowBulkUpload(true); }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                showBulkUpload ? 'bg-purple-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
-              }`}
-            >
-              <FileSpreadsheet size={18} />
-              Bulk Upload
             </button>
             <button
               onClick={() => { setCurrentView('masterdata'); setShowBulkUpload(false); }}
@@ -757,10 +872,10 @@ Return ONLY this JSON:
                   </h3>
                   <ul className="space-y-2 text-sm">
                     <li>• 📊 Bulk Excel Upload - Import 100+ expenses</li>
-                    <li>• 🤖 AI Receipt Scanner - Automatic data extraction</li>
                     <li>• 🧠 Smart Matching - Handles typos & variations</li>
                     <li>• 📥 Download Templates - Pre-filled with your data</li>
                     <li>• 📤 Export Everything - Backup to Excel</li>
+                    <li>• ⚡ Fast Validation - Instant duplicate detection</li>
                   </ul>
                 </div>
                 <div>
@@ -797,23 +912,6 @@ Return ONLY this JSON:
             <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">Add Expense</h2>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { setShowReceiptUpload(true); document.getElementById('receipt-upload').click(); }}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
-                    disabled={receiptProcessing}
-                  >
-                    <Camera size={18} />
-                    {receiptProcessing ? 'Processing...' : 'Scan Receipt (AI)'}
-                  </button>
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={handleReceiptUpload}
-                    className="hidden"
-                    id="receipt-upload"
-                  />
-                </div>
               </div>
               
               {errors.length > 0 && (
@@ -1059,6 +1157,79 @@ Return ONLY this JSON:
                 </div>
               </div>
             )}
+            
+            {/* Bulk Upload Section - Right Here in Expenses Tab! */}
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg shadow-lg p-6 border-2 border-purple-200">
+              <div className="flex items-center gap-3 mb-4">
+                <FileSpreadsheet size={32} className="text-purple-600" />
+                <div>
+                  <h3 className="text-2xl font-bold text-purple-900">💡 Have Many Expenses?</h3>
+                  <p className="text-purple-700">Use Bulk Upload - Import 10-100 expenses at once!</p>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => downloadExpenseTemplate(masterData)}
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
+                  >
+                    <Download size={20} />
+                    Download Template
+                  </button>
+                </div>
+                
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-blue-900 mb-2">📋 How to use:</h4>
+                  <ol className="text-sm text-blue-800 space-y-1 ml-4">
+                    <li>1. Download template → See instructions inside</li>
+                    <li>2. Fill first 5 columns only</li>
+                    <li>3. Scroll right to see vendor & type lists</li>
+                    <li>4. Copy names from lists → Paste in rows</li>
+                    <li>5. Upload below</li>
+                  </ol>
+                </div>
+                
+                <div className="border-2 border-dashed border-purple-300 rounded-lg p-6 text-center bg-white">
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleBulkUpload}
+                    className="hidden"
+                    id="bulk-expense-upload"
+                  />
+                  <label
+                    htmlFor="bulk-expense-upload"
+                    className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 cursor-pointer transition font-semibold text-lg"
+                  >
+                    <Upload size={24} />
+                    Upload Expense CSV
+                  </label>
+                </div>
+                
+                {bulkUploadResults && (
+                  <div className="space-y-4">
+                    <div className="bg-white border border-blue-200 rounded-lg p-4">
+                      <h4 className="font-bold text-blue-900 mb-2">Validation Results</h4>
+                      <div className="grid md:grid-cols-3 gap-2 text-sm">
+                        <div><p>Total: <strong>{bulkUploadResults.total}</strong></p></div>
+                        <div><p className="text-green-700">Valid: <strong>{bulkUploadResults.valid.length}</strong></p></div>
+                        <div><p className="text-orange-700">Warnings: <strong>{bulkUploadResults.warnings.length}</strong></p></div>
+                      </div>
+                    </div>
+                    
+                    {(bulkUploadResults.valid.length > 0 || bulkUploadResults.warnings.length > 0) && (
+                      <button
+                        onClick={importBulkExpenses}
+                        className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-semibold"
+                      >
+                        Import {bulkUploadResults.valid.length + bulkUploadResults.warnings.length} Expenses
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1182,17 +1353,42 @@ Return ONLY this JSON:
         {/* Master Data View */}
         {currentView === 'masterdata' && (
           <div className="space-y-6">
+            {/* Employees Section with Bulk Import */}
             <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Employees ({Object.keys(masterData.employees).length})</h2>
-                <button
-                  onClick={() => exportMasterData(masterData)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  <Download size={18} />
-                  Export
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => downloadEmployeeTemplate()}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    <Download size={18} />
+                    Template
+                  </button>
+                  <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                    <Upload size={18} />
+                    Import
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={handleEmployeeImport}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    onClick={() => exportMasterData(masterData)}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                  >
+                    <Download size={18} />
+                    Export
+                  </button>
+                </div>
               </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-800">
+                💡 <strong>Bulk Import:</strong> Click "Template" → Fill employee details → Click "Import" → Upload CSV
+              </div>
+              
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {Object.values(masterData.employees).map(emp => (
                   <div key={emp.empId} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
@@ -1202,13 +1398,40 @@ Return ONLY this JSON:
                   </div>
                 ))}
                 {Object.keys(masterData.employees).length === 0 && (
-                  <p className="text-gray-500 text-center py-8">No employees. Upload payroll to import.</p>
+                  <p className="text-gray-500 text-center py-8">No employees. Import payroll or use bulk import above.</p>
                 )}
               </div>
             </div>
             
+            {/* Vendors Section with Bulk Import */}
             <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-2xl font-bold mb-4">Vendors ({Object.keys(masterData.vendors).length})</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold">Vendors ({Object.keys(masterData.vendors).length})</h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => downloadVendorTemplate()}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    <Download size={18} />
+                    Template
+                  </button>
+                  <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                    <Upload size={18} />
+                    Import
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={handleVendorImport}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-800">
+                💡 <strong>Bulk Import:</strong> Click "Template" → Fill vendor details → Click "Import" → Upload CSV
+              </div>
+              
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {Object.values(masterData.vendors).map(vendor => (
                   <div key={vendor.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">

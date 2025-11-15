@@ -16,107 +16,114 @@ export const generateJournalNumber = (prefix, index) => {
   return `${prefix}-${dateStr}-${index.toString().padStart(3, '0')}`;
 };
 
-// Download Excel template for bulk upload with dropdown reference
-export const downloadExcelTemplate = (masterData) => {
-  // Create main expense entry sheet
-  const headers = ['Date', 'Type*', 'Payee/Vendor*', 'Amount*', 'Receipt#', 'Reason', 'Narration'];
+// Download SUPER SIMPLE expense template
+export const downloadExpenseTemplate = (masterData) => {
+  const rows = [];
   
-  const instructions = [
-    'DD/MM/YYYY',
-    'Choose from list below',
-    'Choose from list below',
-    'Number only',
-    'Optional',
-    'Optional',
-    'Optional'
-  ];
+  // Clear title
+  rows.push('"=== EXPENSE BULK UPLOAD TEMPLATE ==="');
+  rows.push('');
   
-  const samples = [
-    ['15/11/2025', 'Petrol', 'BHAIRAAV WATER SYSTEMS', '500', 'INV-001', 'Vehicle fuel', 'Daily petrol'],
-    ['14/11/2025', 'Rent', 'ALPINE', '120000', 'RENT-NOV', 'Monthly rent', 'Factory rent payment'],
-    ['', 'Advance', 'Anibash das', '5000', '', 'Emergency', 'Staff advance']
-  ];
+  // Simple instructions
+  rows.push('"HOW TO USE:"');
+  rows.push('"1. Fill ONLY the first 5 columns: Date, Type, Payee, Amount, Receipt#"');
+  rows.push('"2. Look at column H for all expense types - copy exact name"');
+  rows.push('"3. Look at column K for all vendors - copy exact name"');
+  rows.push('"4. Delete these instruction rows and sample rows before uploading"');
+  rows.push('');
   
-  // Build sections
-  const sections = [];
+  // Headers with dropdown lists side by side
+  rows.push('Date,Type,Payee/Vendor,Amount,Receipt#,Reason,Narration,,EXPENSE TYPES,,,VENDORS (with bank details),Bank,IFSC,Account,,EMPLOYEES (with bank details),Bank,IFSC,Account');
+  rows.push('DD/MM/YYYY,Required,Required,Required,Optional,Optional,Optional,,← Copy from here,,,← Copy from here,,,,, ← Copy from here,,,');
+  rows.push('');
   
-  // Main entry area
-  sections.push('=== FILL YOUR EXPENSES BELOW (Delete sample rows) ===');
-  sections.push(headers.join(','));
-  sections.push(instructions.join(','));
-  sections.push('');
-  sections.push(...samples.map(row => row.map(cell => `"${cell}"`).join(',')));
-  sections.push('');
-  sections.push('');
+  // Sample data
+  rows.push('"15/11/2025","Petrol","BHAIRAAV WATER SYSTEMS","500","INV-001","Vehicle fuel","Daily petrol"');
+  rows.push('"14/11/2025","Rent","ALPINE","120000","RENT-NOV","Monthly rent",""');
+  rows.push('"13/11/2025","Advance","Anibash das","5000","","Emergency",""');
+  rows.push('');
   
-  // Expense Types Reference (for dropdown)
-  sections.push('=== EXPENSE TYPES - Copy exact name to Type column ===');
-  Object.keys(CONFIG.expenseTypes).forEach(type => {
-    sections.push(`"${type}"`);
-  });
-  sections.push('');
-  sections.push('');
+  // Build reference columns
+  const expenseTypes = Object.keys(CONFIG.expenseTypes);
+  const vendors = Object.values(masterData.vendors || {});
+  const employees = Object.values(masterData.employees || {});
   
-  // Vendors Reference (for dropdown)
-  sections.push('=== VENDORS - Copy exact name to Payee column ===');
-  sections.push('Vendor Name,Bank,IFSC,Account');
-  Object.values(masterData.vendors || {}).forEach(v => {
-    sections.push(`"${v.name}","${v.bank}","${v.ifsc}","${v.accountNo}"`);
-  });
-  sections.push('');
-  sections.push('');
+  const maxRows = Math.max(expenseTypes.length, vendors.length, employees.length);
   
-  // Employees Reference (for dropdown)
-  sections.push('=== EMPLOYEES - Copy exact name to Payee column ===');
-  sections.push('Emp ID,Name,Department,Bank,IFSC,Account');
-  Object.values(masterData.employees || {}).forEach(e => {
-    sections.push(`"${e.empId}","${e.name}","${e.department || ''}","${e.bankName}","${e.ifsc}","${e.accountNo}"`);
-  });
-  
-  const csv = sections.join('\n');
-  downloadCSV(csv, `Expense_Template_${new Date().toISOString().split('T')[0]}.csv`);
-};
-
-// Download template for bulk importing vendors
-export const downloadVendorImportTemplate = () => {
-  const headers = ['Vendor Name*', 'Bank Name*', 'IFSC Code*', 'Account Number*', 'Branch', 'Status'];
-  const instructions = ['Required', 'Required', 'Required (11 chars)', 'Required', 'Optional', 'Active/Inactive'];
-  const samples = [
-    ['ABC Suppliers', 'HDFC Bank', 'HDFC0001234', '12345678901', 'Mumbai Branch', 'Active'],
-    ['XYZ Services', 'ICICI Bank', 'ICIC0005678', '98765432101', 'Delhi Branch', 'Active']
-  ];
-  
-  const rows = [
-    headers.join(','),
-    instructions.join(','),
-    '',
-    '=== SAMPLE DATA - Delete before uploading ===',
-    ...samples.map(row => row.map(cell => `"${cell}"`).join(','))
-  ];
+  for (let i = 0; i < maxRows; i++) {
+    const cols = ['', '', '', '', '', '', '', '']; // Empty expense columns
+    
+    // Expense type column
+    if (i < expenseTypes.length) {
+      cols.push(`"${expenseTypes[i]}"`, '', '');
+    } else {
+      cols.push('', '', '');
+    }
+    
+    // Vendor columns
+    if (i < vendors.length) {
+      const v = vendors[i];
+      cols.push(`"${v.name}"`, `"${v.bank}"`, `"${v.ifsc}"`, `"${v.accountNo}"`, '');
+    } else {
+      cols.push('', '', '', '', '');
+    }
+    
+    // Employee columns
+    if (i < employees.length) {
+      const e = employees[i];
+      cols.push(`"${e.name}"`, `"${e.bankName}"`, `"${e.ifsc}"`, `"${e.accountNo}"`);
+    } else {
+      cols.push('', '', '', '');
+    }
+    
+    rows.push(cols.join(','));
+  }
   
   const csv = rows.join('\n');
-  downloadCSV(csv, `Vendor_Import_Template_${new Date().toISOString().split('T')[0]}.csv`);
+  downloadCSV(csv, `Expense_BulkUpload_${new Date().toISOString().split('T')[0]}.csv`);
 };
 
-// Download template for bulk importing employees  
-export const downloadEmployeeImportTemplate = () => {
-  const headers = ['Emp ID*', 'Name*', 'Department', 'Designation', 'Bank Name*', 'IFSC Code*', 'Account Number*', 'Branch', 'Account Type'];
-  const instructions = ['E0001', 'Required', 'Optional', 'Optional', 'Required', 'Required', 'Required', 'Optional', 'Saving/Current'];
-  const samples = [
-    ['E0201', 'John Doe', 'Sales', 'Manager', 'HDFC Bank', 'HDFC0001234', '12345678901', 'Mumbai', 'Saving'],
-    ['E0202', 'Jane Smith', 'Accounts', 'Accountant', 'ICICI Bank', 'ICIC0005678', '98765432101', 'Delhi', 'Saving']
-  ];
+// Download SIMPLE vendor import template
+export const downloadVendorTemplate = () => {
+  const rows = [];
   
-  const rows = [
-    headers.join(','),
-    instructions.join(','),
-    '',
-    '=== SAMPLE DATA - Delete before uploading ===',
-    ...samples.map(row => row.map(cell => `"${cell}"`).join(','))
-  ];
+  rows.push('"=== VENDOR BULK IMPORT TEMPLATE ==="');
+  rows.push('');
+  rows.push('"HOW TO USE:"');
+  rows.push('"1. Fill all columns A to E (Branch is optional)"');
+  rows.push('"2. One vendor per row"');
+  rows.push('"3. Delete these instruction rows and sample rows before uploading"');
+  rows.push('');
+  rows.push('"Vendor Name","Bank Name","IFSC Code","Account Number","Branch"');
+  rows.push('"Required","Required","Required (11 chars)","Required","Optional"');
+  rows.push('');
+  rows.push('"ABC Suppliers","HDFC Bank","HDFC0001234","12345678901","Mumbai Branch"');
+  rows.push('"XYZ Services","ICICI Bank","ICIC0005678","98765432101","Delhi Branch"');
   
   const csv = rows.join('\n');
-  downloadCSV(csv, `Employee_Import_Template_${new Date().toISOString().split('T')[0]}.csv`);
+  downloadCSV(csv, `Vendor_Import_${new Date().toISOString().split('T')[0]}.csv`);
+};
+
+// Download SIMPLE employee import template
+export const downloadEmployeeTemplate = () => {
+  const rows = [];
+  
+  rows.push('"=== EMPLOYEE BULK IMPORT TEMPLATE ==="');
+  rows.push('');
+  rows.push('"HOW TO USE:"');
+  rows.push('"1. Fill columns A to G (Department, Designation, Branch are optional)"');
+  rows.push('"2. Emp ID format: E0001, E0002, etc."');
+  rows.push('"3. One employee per row"');
+  rows.push('"4. Delete these instruction rows and sample rows before uploading"');
+  rows.push('');
+  rows.push('"Emp ID","Name","Department","Designation","Bank Name","IFSC Code","Account Number","Branch"');
+  rows.push('"Required","Required","Optional","Optional","Required","Required","Required","Optional"');
+  rows.push('');
+  rows.push('"E0201","John Doe","Sales","Manager","HDFC Bank","HDFC0001234","12345678901","Mumbai Branch"');
+  rows.push('"E0202","Jane Smith","Accounts","Accountant","ICICI Bank","ICIC0005678","98765432101","Delhi Branch"');
+  
+  const csv = rows.join('\n');
+  downloadCSV(csv, `Employee_Import_${new Date().toISOString().split('T')[0]}.csv`);
 };
 
 // Download master data reference lists
@@ -124,24 +131,24 @@ export const downloadMasterDataLists = (masterData) => {
   const sections = [];
   
   // Expense Types
-  sections.push('=== EXPENSE TYPES (Copy exact names for Type column) ===');
-  sections.push('Type,Dr Account,TDS,Min Amount,Max Amount,Category');
+  sections.push('"=== EXPENSE TYPES ==="');
+  sections.push('"Type","Dr Account","TDS","Min Amount","Max Amount"');
   Object.entries(CONFIG.expenseTypes).forEach(([type, config]) => {
-    sections.push(`"${type}","${config.dr}","${config.tds || 'None'}",${config.minAmount || 0},${config.maxAmount || 'No limit'},"${config.category}"`);
+    sections.push(`"${type}","${config.dr}","${config.tds || 'None'}",${config.minAmount || 0},${config.maxAmount || 'No limit'}`);
   });
   sections.push('');
   
   // Vendors
-  sections.push('=== VENDORS (Copy exact names for Payee Name column) ===');
-  sections.push('Vendor ID,Vendor Name,Bank,IFSC,Account No,Branch,Status');
+  sections.push('"=== VENDORS ==="');
+  sections.push('"Vendor Name","Bank","IFSC","Account No","Branch","Status"');
   Object.values(masterData.vendors || {}).forEach(v => {
-    sections.push(`"${v.id}","${v.name}","${v.bank}","${v.ifsc}","${v.accountNo}","${v.branch || ''}","${v.status}"`);
+    sections.push(`"${v.name}","${v.bank}","${v.ifsc}","${v.accountNo}","${v.branch || ''}","${v.status}"`);
   });
   sections.push('');
   
   // Employees
-  sections.push('=== EMPLOYEES (Copy exact names or Emp ID for Payee Name / For Employee ID) ===');
-  sections.push('Emp ID,Name,Department,Designation,Bank,IFSC,Account No,Branch');
+  sections.push('"=== EMPLOYEES ==="');
+  sections.push('"Emp ID","Name","Department","Designation","Bank Name","IFSC","Account No","Branch"');
   Object.values(masterData.employees || {}).forEach(e => {
     sections.push(`"${e.empId}","${e.name}","${e.department || ''}","${e.designation || ''}","${e.bankName}","${e.ifsc}","${e.accountNo}","${e.branch || ''}"`);
   });
@@ -201,8 +208,8 @@ export const exportMasterData = (masterData) => {
   const sections = [];
   
   // Employees
-  sections.push('=== EMPLOYEES ===');
-  sections.push('Emp ID,Name,Department,Designation,Bank Name,IFSC,Account No,Branch,Account Type');
+  sections.push('"=== EMPLOYEES ==="');
+  sections.push('"Emp ID","Name","Department","Designation","Bank Name","IFSC","Account No","Branch","Account Type"');
   Object.values(masterData.employees || {}).forEach(e => {
     sections.push([
       e.empId, e.name, e.department || '', e.designation || '',
@@ -212,8 +219,8 @@ export const exportMasterData = (masterData) => {
   sections.push('');
   
   // Vendors
-  sections.push('=== VENDORS ===');
-  sections.push('Vendor ID,Name,Bank,IFSC,Account No,Branch,Status');
+  sections.push('"=== VENDORS ==="');
+  sections.push('"Vendor ID","Name","Bank","IFSC","Account No","Branch","Status"');
   Object.values(masterData.vendors || {}).forEach(v => {
     sections.push([
       v.id, v.name, v.bank, v.ifsc, v.accountNo, v.branch || '', v.status
@@ -239,11 +246,15 @@ const downloadCSV = (csv, filename) => {
 
 // Parse CSV/Excel data
 export const parseCSVData = (text) => {
-  const lines = text.trim().split('\n').filter(line => 
-    line.trim() && 
-    !line.startsWith('===') && 
-    !line.toLowerCase().includes('sample data')
-  );
+  const lines = text.trim().split('\n').filter(line => {
+    const lower = line.toLowerCase();
+    return line.trim() && 
+           !line.startsWith('===') && 
+           !lower.includes('sample') &&
+           !lower.includes('instruction') &&
+           !lower.includes('how to use') &&
+           !lower.includes('delete these');
+  });
   
   if (lines.length < 2) {
     throw new Error('File appears to be empty or invalid');
@@ -251,8 +262,12 @@ export const parseCSVData = (text) => {
   
   const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, '').replace('*', ''));
   const dataRows = lines.slice(1).filter(line => {
-    const firstCell = line.split(',')[0]?.trim().replace(/"/g, '');
-    return firstCell && !firstCell.toLowerCase().includes('dd/mm/yyyy');
+    const firstCell = line.split(',')[0]?.trim().replace(/"/g, '').toLowerCase();
+    return firstCell && 
+           !firstCell.includes('dd/mm/yyyy') && 
+           !firstCell.includes('required') &&
+           !firstCell.includes('optional') &&
+           firstCell.length > 0;
   });
   
   const data = dataRows.map(line => {
