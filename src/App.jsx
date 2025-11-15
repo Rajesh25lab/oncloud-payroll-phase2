@@ -46,6 +46,31 @@ function App() {
   const [bulkUploadResults, setBulkUploadResults] = useState(null);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   
+  // Vendor form state
+  const [showVendorForm, setShowVendorForm] = useState(false);
+  const [vendorForm, setVendorForm] = useState({
+    name: '',
+    bank: '',
+    ifsc: '',
+    accountNo: '',
+    branch: '',
+    status: 'Active'
+  });
+  
+  // Employee form state
+  const [showEmployeeForm, setShowEmployeeForm] = useState(false);
+  const [employeeForm, setEmployeeForm] = useState({
+    empId: '',
+    name: '',
+    department: '',
+    designation: '',
+    bankName: '',
+    ifsc: '',
+    accountNo: '',
+    branch: '',
+    accountType: 'Saving'
+  });
+  
   // AI Receipt state
   const [showReceiptUpload, setShowReceiptUpload] = useState(false);
   const [receiptProcessing, setReceiptProcessing] = useState(false);
@@ -521,6 +546,81 @@ function App() {
     } catch (error) {
       setErrors([`Error importing employees: ${error.message}`]);
     }
+  };
+
+  // Add vendor manually
+  const addVendor = () => {
+    const { name, bank, ifsc, accountNo } = vendorForm;
+    
+    if (!name || !bank || !ifsc || !accountNo) {
+      setErrors(['Please fill in all required fields (Name, Bank, IFSC, Account)']);
+      return;
+    }
+    
+    const vendorId = generateId('VEN');
+    const newVendors = { ...masterData.vendors };
+    
+    newVendors[vendorId] = {
+      id: vendorId,
+      name: name,
+      bank: bank,
+      ifsc: ifsc.toUpperCase(),
+      accountNo: accountNo,
+      branch: vendorForm.branch,
+      status: vendorForm.status,
+      type: 'vendor',
+      addedDate: new Date().toISOString(),
+      source: 'manual_entry'
+    };
+    
+    setMasterData({ ...masterData, vendors: newVendors });
+    setVendorForm({ name: '', bank: '', ifsc: '', accountNo: '', branch: '', status: 'Active' });
+    setShowVendorForm(false);
+    setErrors([]);
+    alert(`✅ Vendor "${name}" added successfully!`);
+  };
+
+  // Add employee manually
+  const addEmployee = () => {
+    const { empId, name, bankName, ifsc, accountNo } = employeeForm;
+    
+    if (!empId || !name || !bankName || !ifsc || !accountNo) {
+      setErrors(['Please fill in all required fields (Emp ID, Name, Bank, IFSC, Account)']);
+      return;
+    }
+    
+    if (!empId.startsWith('E')) {
+      setErrors(['Emp ID must start with "E" (example: E0001)']);
+      return;
+    }
+    
+    if (masterData.employees[empId]) {
+      setErrors([`Employee ID ${empId} already exists!`]);
+      return;
+    }
+    
+    const newEmployees = { ...masterData.employees };
+    
+    newEmployees[empId] = {
+      empId: empId,
+      name: name,
+      type: 'employee',
+      department: employeeForm.department,
+      designation: employeeForm.designation,
+      bankName: bankName,
+      ifsc: ifsc.toUpperCase(),
+      accountNo: accountNo,
+      branch: employeeForm.branch,
+      accountType: employeeForm.accountType,
+      addedDate: new Date().toISOString(),
+      source: 'manual_entry'
+    };
+    
+    setMasterData({ ...masterData, employees: newEmployees });
+    setEmployeeForm({ empId: '', name: '', department: '', designation: '', bankName: '', ifsc: '', accountNo: '', branch: '', accountType: 'Saving' });
+    setShowEmployeeForm(false);
+    setErrors([]);
+    alert(`✅ Employee "${name}" added successfully!`);
   };
 
   // AI Receipt Reading
@@ -1242,6 +1342,13 @@ Return ONLY this JSON:
                 <h2 className="text-2xl font-bold">Employees ({Object.keys(masterData.employees).length})</h2>
                 <div className="flex gap-2">
                   <button
+                    onClick={() => setShowEmployeeForm(!showEmployeeForm)}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                  >
+                    <Plus size={18} />
+                    Add Employee
+                  </button>
+                  <button
                     onClick={() => downloadEmployeeTemplate()}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
                   >
@@ -1268,8 +1375,137 @@ Return ONLY this JSON:
                 </div>
               </div>
               
+              {/* Manual Add Employee Form */}
+              {showEmployeeForm && (
+                <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-6 mb-4">
+                  <h3 className="text-lg font-bold text-purple-900 mb-4">Add New Employee</h3>
+                  <div className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Emp ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={employeeForm.empId}
+                          onChange={(e) => setEmployeeForm({...employeeForm, empId: e.target.value.toUpperCase()})}
+                          placeholder="E0001"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={employeeForm.name}
+                          onChange={(e) => setEmployeeForm({...employeeForm, name: e.target.value})}
+                          placeholder="Enter employee name"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Department</label>
+                        <input
+                          type="text"
+                          value={employeeForm.department}
+                          onChange={(e) => setEmployeeForm({...employeeForm, department: e.target.value})}
+                          placeholder="Department"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Designation</label>
+                        <input
+                          type="text"
+                          value={employeeForm.designation}
+                          onChange={(e) => setEmployeeForm({...employeeForm, designation: e.target.value})}
+                          placeholder="Designation"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Bank Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={employeeForm.bankName}
+                          onChange={(e) => setEmployeeForm({...employeeForm, bankName: e.target.value})}
+                          placeholder="Bank name"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          IFSC Code <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={employeeForm.ifsc}
+                          onChange={(e) => setEmployeeForm({...employeeForm, ifsc: e.target.value.toUpperCase()})}
+                          placeholder="IFSC (11 chars)"
+                          maxLength="11"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Account Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={employeeForm.accountNo}
+                          onChange={(e) => setEmployeeForm({...employeeForm, accountNo: e.target.value})}
+                          placeholder="Account number"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
+                        <input
+                          type="text"
+                          value={employeeForm.branch}
+                          onChange={(e) => setEmployeeForm({...employeeForm, branch: e.target.value})}
+                          placeholder="Branch name"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-4">
+                      <button
+                        onClick={addEmployee}
+                        className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold"
+                      >
+                        ✓ Save Employee
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowEmployeeForm(false);
+                          setEmployeeForm({ empId: '', name: '', department: '', designation: '', bankName: '', ifsc: '', accountNo: '', branch: '', accountType: 'Saving' });
+                        }}
+                        className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-800">
-                💡 <strong>Bulk Import:</strong> Click "Template" → Fill employee details → Click "Import" → Upload CSV
+                💡 <strong>Single:</strong> Click "Add Employee" → Fill form → Save | <strong>Bulk:</strong> Click "Template" → Fill CSV → Click "Import" | <strong>Or:</strong> Import from Payroll tab
               </div>
               
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -1281,7 +1517,7 @@ Return ONLY this JSON:
                   </div>
                 ))}
                 {Object.keys(masterData.employees).length === 0 && (
-                  <p className="text-gray-500 text-center py-8">No employees. Import payroll or use bulk import above.</p>
+                  <p className="text-gray-500 text-center py-8">No employees. Add manually, import CSV, or upload payroll.</p>
                 )}
               </div>
             </div>
@@ -1291,6 +1527,13 @@ Return ONLY this JSON:
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Vendors ({Object.keys(masterData.vendors).length})</h2>
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowVendorForm(!showVendorForm)}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                  >
+                    <Plus size={18} />
+                    Add Vendor
+                  </button>
                   <button
                     onClick={() => downloadVendorTemplate()}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -1311,8 +1554,101 @@ Return ONLY this JSON:
                 </div>
               </div>
               
+              {/* Manual Add Vendor Form */}
+              {showVendorForm && (
+                <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-6 mb-4">
+                  <h3 className="text-lg font-bold text-purple-900 mb-4">Add New Vendor</h3>
+                  <div className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Vendor Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={vendorForm.name}
+                          onChange={(e) => setVendorForm({...vendorForm, name: e.target.value})}
+                          placeholder="Enter vendor name"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Bank Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={vendorForm.bank}
+                          onChange={(e) => setVendorForm({...vendorForm, bank: e.target.value})}
+                          placeholder="Enter bank name"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          IFSC Code <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={vendorForm.ifsc}
+                          onChange={(e) => setVendorForm({...vendorForm, ifsc: e.target.value.toUpperCase()})}
+                          placeholder="IFSC (11 chars)"
+                          maxLength="11"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Account Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={vendorForm.accountNo}
+                          onChange={(e) => setVendorForm({...vendorForm, accountNo: e.target.value})}
+                          placeholder="Account number"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Branch
+                        </label>
+                        <input
+                          type="text"
+                          value={vendorForm.branch}
+                          onChange={(e) => setVendorForm({...vendorForm, branch: e.target.value})}
+                          placeholder="Branch name"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-4">
+                      <button
+                        onClick={addVendor}
+                        className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold"
+                      >
+                        ✓ Save Vendor
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowVendorForm(false);
+                          setVendorForm({ name: '', bank: '', ifsc: '', accountNo: '', branch: '', status: 'Active' });
+                        }}
+                        className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-800">
-                💡 <strong>Bulk Import:</strong> Click "Template" → Fill vendor details → Click "Import" → Upload CSV
+                💡 <strong>Single:</strong> Click "Add Vendor" → Fill form → Save | <strong>Bulk:</strong> Click "Template" → Fill CSV → Click "Import"
               </div>
               
               <div className="space-y-2 max-h-96 overflow-y-auto">
