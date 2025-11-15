@@ -1,156 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Download, Home, DollarSign, Users, AlertCircle, CheckCircle, Trash2, Plus, List, LogOut, User, Settings, Database, Receipt, FileSpreadsheet, UserPlus, Eye, EyeOff } from 'lucide-react';
+import { Upload, FileText, Download, Home, DollarSign, Users, AlertCircle, CheckCircle, Trash2, Plus, List, LogOut, User, Settings, Database, Receipt, FileSpreadsheet, Eye, EyeOff, Camera, Zap } from 'lucide-react';
 
-// Initial vendor data from Rajesh's list
-const INITIAL_VENDORS = [
-  { id: 'V001', name: 'ALPINE', accountNo: '1246261006174', ifsc: 'CNRB0002344', bank: 'Canara Bank', branch: 'karur', status: 'Active' },
-  { id: 'V002', name: 'AMMAN TRADERS', accountNo: '4037201000436', ifsc: 'CNRB0004037', bank: 'Canara Bank', branch: 'TIRUPPUR', status: 'Active' },
-  { id: 'V003', name: 'AMMAN TRADERS', accountNo: '9613576100', ifsc: 'KKBK0008785', bank: 'Kotak Mahindra Bank', branch: '', status: 'Active' },
-  { id: 'V004', name: 'VARSHA COTTON MILLS ARISTOCRATIC ENTERPRISES', accountNo: '338073000001927', ifsc: 'SIBL0000338', bank: 'South Indian Bank', branch: '', status: 'Active' },
-  { id: 'V005', name: 'ASM TEXTILES', accountNo: '1195102000007092', ifsc: 'IBKL0001195', bank: 'IDBI Bank', branch: '', status: 'Active' },
-  { id: 'V006', name: 'BABBALTEXO FAB', accountNo: '918030091703751', ifsc: 'UTIB0003503', bank: 'Axis Bank', branch: '', status: 'Active' },
-  { id: 'V007', name: 'BHAIRAAV WATER SYSTEMS', accountNo: '5949544882', ifsc: 'KKBK0000492', bank: 'Kotak Mahindra Bank', branch: '', status: 'Active' },
-  { id: 'V008', name: 'CHIRAG ENTERPRISE', accountNo: '08472020000490', ifsc: 'HDFC0000847', bank: 'HDFC Bank', branch: '', status: 'Active' },
-  { id: 'V009', name: 'COSMIC COMPUTER', accountNo: '0113102000100649', ifsc: 'IBKL0000113', bank: 'IDBI Bank', branch: '', status: 'Active' },
-  { id: 'V010', name: 'DIGIWHITE FABRICS LLP', accountNo: '8000666444', ifsc: 'KKBK0002867', bank: 'Kotak Mahindra Bank', branch: '', status: 'Active' },
-  { id: 'V011', name: 'EAGLE PRINT CARE', accountNo: '0393102000008297', ifsc: 'IBKL0000393', bank: 'IDBI Bank', branch: '', status: 'Active' },
-  { id: 'V012', name: 'FRIENDS PACK', accountNo: '50200014924572', ifsc: 'HDFC0002408', bank: 'HDFC Bank', branch: '', status: 'Active' },
-  { id: 'V013', name: 'GINNI SPECTRA', accountNo: '675405500011', ifsc: 'ICIC0006754', bank: 'ICICI Bank', branch: '', status: 'Active' }
-];
-
-// Configuration
-const CONFIG = {
-  ledgers: {
-    bank: "Kotak Mahindra Bank",
-    salary: "Salary A/c",
-    wages: "Wages",
-    otherEarnings: "Other Earnings",
-    overtime: "Overtime",
-    esi: "ESI Payable",
-    loan: "Staff Loan & Advance",
-    extraPay: "Extra Pay",
-    penalties: "Penalties",
-    tdsSalary: "TDS Payable - Salary"
-  },
-  narrations: {
-    monthly: "Monthly payroll",
-    weekly: "Weekly payroll",
-    manual: "Manual Entry",
-    expense: "Expense Payment"
-  },
-  companyAccount: "4647261831",
-  companyName: "On Cloud",
-  supportEmail: "rajesh@oncloudindia.com",
-  
-  // Expense types with Dr accounts and validation ranges
-  expenseTypes: {
-    "Rent": { 
-      dr: "Factory Rent A/c @GST", 
-      tds: "TDS 10%", 
-      rate: 0.1,
-      minAmount: 100000,
-      maxAmount: 150000,
-      category: "Fixed Expense"
-    },
-    "Interest": { 
-      dr: "Loan Interest A/c", 
-      tds: "Tds on Interest", 
-      rate: 0.1,
-      minAmount: 10000,
-      maxAmount: 90000,
-      category: "Financial"
-    },
-    "Petrol": { 
-      dr: "Petrol A/c", 
-      tds: null, 
-      rate: 0,
-      minAmount: 1,
-      maxAmount: 3000,
-      category: "Operating Expense"
-    },
-    "Advance": { 
-      dr: "Staff Advance A/c", 
-      tds: null, 
-      rate: 0,
-      minAmount: 500,
-      maxAmount: 50000,
-      category: "Staff Advance"
-    },
-    "Loan": { 
-      dr: "Staff Loan A/c", 
-      tds: null, 
-      rate: 0,
-      minAmount: 1000,
-      maxAmount: 100000,
-      category: "Staff Loan"
-    },
-    "Salary": { 
-      dr: "Salary A/c", 
-      tds: null, 
-      rate: 0,
-      minAmount: 1000,
-      maxAmount: 100000,
-      category: "Payroll"
-    },
-    "Wages": { 
-      dr: "Wages A/c", 
-      tds: null, 
-      rate: 0,
-      minAmount: 500,
-      maxAmount: 50000,
-      category: "Payroll"
-    },
-    "Overtime": { 
-      dr: "Overtime A/c", 
-      tds: null, 
-      rate: 0,
-      minAmount: 100,
-      maxAmount: 10000,
-      category: "Payroll"
-    },
-    "Cutting Charges": { 
-      dr: "Cutting Charges A/c", 
-      tds: "TDS 1%", 
-      rate: 0.01,
-      minAmount: 1000,
-      maxAmount: 100000,
-      category: "Production"
-    },
-    "Stitching Charges": { 
-      dr: "Stitching Charges A/c", 
-      tds: "TDS 1%", 
-      rate: 0.01,
-      minAmount: 1000,
-      maxAmount: 100000,
-      category: "Production"
-    },
-    "Cartage": { 
-      dr: "Cartage A/c", 
-      tds: "TDS 1%", 
-      rate: 0.01,
-      minAmount: 500,
-      maxAmount: 50000,
-      category: "Logistics"
-    },
-    "Professional Fees": { 
-      dr: "Professional Fees A/c", 
-      tds: "TDS 10%", 
-      rate: 0.1,
-      minAmount: 5000,
-      maxAmount: 200000,
-      category: "Professional Services"
-    },
-    "Other": { 
-      dr: "Miscellaneous Expenses A/c", 
-      tds: null, 
-      rate: 0,
-      minAmount: 0,
-      maxAmount: 5000,
-      category: "Miscellaneous",
-      alertThreshold: 5000
-    }
-  }
-};
+// Import utilities
+import { findBestMatch, getConfidenceLabel, needsConfirmation } from './utils/fuzzyMatching';
+import { validateExpenseAmount, checkDuplicateExpense, validateBulkRow, formatDate, parseDateToISO } from './utils/validation';
+import { downloadExcelTemplate, downloadMasterDataLists, exportExpenses, exportMasterData, parseCSVData, generateId, generateJournalNumber } from './utils/exportUtils';
+import { saveToStorage, loadFromStorage } from './utils/storage';
+import { CONFIG, INITIAL_VENDORS, DEFAULT_USER } from './config/constants';
 
 function App() {
   // Authentication state
@@ -171,7 +27,7 @@ function App() {
   const [expenseForm, setExpenseForm] = useState({
     date: new Date().toISOString().split('T')[0],
     type: 'Petrol',
-    payeeType: 'vendor', // 'vendor', 'employee', 'other'
+    payeeType: 'vendor',
     payeeId: '',
     payeeName: '',
     forSelf: true,
@@ -186,39 +42,35 @@ function App() {
     branch: ''
   });
   
+  // Bulk upload state
+  const [bulkUploadResults, setBulkUploadResults] = useState(null);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  
+  // AI Receipt state
+  const [showReceiptUpload, setShowReceiptUpload] = useState(false);
+  const [receiptProcessing, setReceiptProcessing] = useState(false);
+  
+  // Payroll batch state
   const [paymentBatch, setPaymentBatch] = useState({
     monthly: null,
-    weekly: null,
-    expenses: []
+    weekly: null
   });
   
   const [errors, setErrors] = useState([]);
 
   // Initialize app - load from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('oncloud_phase2_data');
+    const saved = loadFromStorage();
     if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        setMasterData(data.masterData || { employees: {}, vendors: {}, users: {} });
-        setExpenses(data.expenses || []);
-      } catch (e) {
-        console.error('Error loading data:', e);
-      }
+      setMasterData(saved.masterData || { employees: {}, vendors: {}, users: {} });
+      setExpenses(saved.expenses || []);
     } else {
-      // Initialize with default vendors and admin user
+      // Initialize with defaults
       const initialData = {
         employees: {},
         vendors: {},
         users: {
-          'admin': {
-            username: 'admin',
-            password: 'admin123', // In production, this should be hashed!
-            name: 'Rajesh',
-            empId: 'ADMIN',
-            role: 'admin',
-            email: 'rajesh@oncloudindia.com'
-          }
+          'admin': DEFAULT_USER
         }
       };
       
@@ -232,19 +84,14 @@ function App() {
       });
       
       setMasterData(initialData);
-      saveData({ masterData: initialData, expenses: [] });
+      saveToStorage({ masterData: initialData, expenses: [] });
     }
   }, []);
-
-  // Save to localStorage
-  const saveData = (data) => {
-    localStorage.setItem('oncloud_phase2_data', JSON.stringify(data));
-  };
 
   // Auto-save when data changes
   useEffect(() => {
     if (currentUser) {
-      saveData({ masterData, expenses });
+      saveToStorage({ masterData, expenses });
     }
   }, [masterData, expenses, currentUser]);
 
@@ -270,21 +117,6 @@ function App() {
     setCurrentView('home');
   };
 
-  // Format date as DD/MM/YYYY
-  const formatDate = (date = new Date()) => {
-    const d = date.getDate().toString().padStart(2, '0');
-    const m = (date.getMonth() + 1).toString().padStart(2, '0');
-    const y = date.getFullYear();
-    return `${d}/${m}/${y}`;
-  };
-
-  // Generate unique IDs
-  const generateId = (prefix) => {
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000);
-    return `${prefix}-${timestamp}-${random}`;
-  };
-
   // Import employees from payroll CSV
   const importEmployeesFromPayroll = (employees) => {
     const newEmployees = { ...masterData.employees };
@@ -293,7 +125,6 @@ function App() {
     employees.forEach(emp => {
       const empId = emp['Emp ID'];
       if (empId && empId.startsWith('E')) {
-        // Only import if new or updated
         if (!newEmployees[empId] || newEmployees[empId].lastUpdated < new Date().toISOString()) {
           newEmployees[empId] = {
             empId: empId,
@@ -318,50 +149,44 @@ function App() {
     return importCount;
   };
 
-  // Validate expense amount
-  const validateExpenseAmount = (type, amount) => {
-    const config = CONFIG.expenseTypes[type];
-    if (!config) return { valid: true };
+  // Handle payee selection
+  const handlePayeeSelect = (e) => {
+    const payeeId = e.target.value;
+    setExpenseForm({ ...expenseForm, payeeId });
     
-    const amt = parseFloat(amount);
-    const warnings = [];
-    
-    if (config.minAmount && amt < config.minAmount) {
-      warnings.push(`Amount below normal range (min: ₹${config.minAmount.toLocaleString()})`);
+    if (expenseForm.payeeType === 'vendor') {
+      const vendor = masterData.vendors[payeeId];
+      if (vendor) {
+        setExpenseForm({
+          ...expenseForm,
+          payeeId,
+          payeeName: vendor.name,
+          bankName: vendor.bank,
+          ifsc: vendor.ifsc,
+          accountNo: vendor.accountNo,
+          branch: vendor.branch || ''
+        });
+      }
+    } else if (expenseForm.payeeType === 'employee') {
+      const employee = masterData.employees[payeeId];
+      if (employee) {
+        setExpenseForm({
+          ...expenseForm,
+          payeeId,
+          payeeName: employee.name,
+          bankName: employee.bankName,
+          ifsc: employee.ifsc,
+          accountNo: employee.accountNo,
+          branch: employee.branch || ''
+        });
+      }
     }
-    
-    if (config.maxAmount && amt > config.maxAmount) {
-      warnings.push(`Amount above normal range (max: ₹${config.maxAmount.toLocaleString()})`);
-    }
-    
-    if (config.alertThreshold && amt > config.alertThreshold) {
-      warnings.push(`Amount exceeds alert threshold (₹${config.alertThreshold.toLocaleString()})`);
-    }
-    
-    return {
-      valid: warnings.length === 0,
-      warnings: warnings
-    };
-  };
-
-  // Check for duplicate expenses
-  const checkDuplicateExpense = (newExpense) => {
-    const duplicates = expenses.filter(exp => {
-      const sameDate = exp.date === newExpense.date;
-      const sameType = exp.type === newExpense.type;
-      const sameAmount = Math.abs(parseFloat(exp.amount) - parseFloat(newExpense.amount)) < 0.01;
-      const samePayee = exp.payeeName === newExpense.payeeName;
-      
-      return sameDate && sameType && sameAmount && samePayee && exp.status !== 'rejected';
-    });
-    
-    return duplicates.length > 0 ? duplicates : null;
   };
 
   // Add expense
   const addExpense = () => {
     const validation = validateExpenseAmount(expenseForm.type, expenseForm.amount);
-    const duplicates = checkDuplicateExpense(expenseForm);
+    const duplicates = checkDuplicateExpense(expenseForm, expenses);
     
     const warnings = [...(validation.warnings || [])];
     if (duplicates) {
@@ -373,7 +198,6 @@ function App() {
       return;
     }
     
-    // Get Cr account (who the money goes to/who paid)
     let crAccount = currentUser.name;
     if (!expenseForm.forSelf && expenseForm.forEmployeeId) {
       const employee = masterData.employees[expenseForm.forEmployeeId];
@@ -419,115 +243,296 @@ function App() {
     setErrors([]);
   };
 
-  // Handle payee selection
-  const handlePayeeSelect = (e) => {
-    const payeeId = e.target.value;
-    setExpenseForm({ ...expenseForm, payeeId });
-    
-    if (expenseForm.payeeType === 'vendor') {
-      const vendor = masterData.vendors[payeeId];
-      if (vendor) {
-        setExpenseForm({
-          ...expenseForm,
-          payeeId,
-          payeeName: vendor.name,
-          bankName: vendor.bank,
-          ifsc: vendor.ifsc,
-          accountNo: vendor.accountNo,
-          branch: vendor.branch || ''
-        });
-      }
-    } else if (expenseForm.payeeType === 'employee') {
-      const employee = masterData.employees[payeeId];
-      if (employee) {
-        setExpenseForm({
-          ...expenseForm,
-          payeeId,
-          payeeName: employee.name,
-          bankName: employee.bankName,
-          ifsc: employee.ifsc,
-          accountNo: employee.accountNo,
-          branch: employee.branch || ''
-        });
-      }
-    }
-  };
+  // Handle bulk Excel upload
+  const handleBulkUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
 
-  // Parse CSV data
-  const parseExcelData = (text) => {
-    const lines = text.trim().split('\n');
-    if (lines.length < 2) throw new Error('File appears to be empty or invalid');
-    
-    const headers = lines[0].split(',').map(h => h.trim());
-    const data = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',');
-      const row = {};
-      headers.forEach((header, idx) => {
-        row[header] = values[idx]?.trim() || '';
+    try {
+      const text = await file.text();
+      const data = parseCSVData(text);
+      
+      const results = {
+        total: data.length,
+        valid: [],
+        warnings: [],
+        errors: []
+      };
+      
+      data.forEach((row, idx) => {
+        const rowNum = idx + 2;
+        const { errors: rowErrors, warnings: rowWarnings } = validateBulkRow(row, rowNum);
+        
+        if (rowErrors.length > 0) {
+          results.errors.push({ row: rowNum, data: row, errors: rowErrors });
+          return;
+        }
+        
+        const allWarnings = [...rowWarnings];
+        
+        // Try to match payee
+        const payeeType = row['Payee Type']?.toLowerCase() || 'vendor';
+        let payeeMatch = null;
+        
+        if (payeeType.includes('vendor')) {
+          payeeMatch = findBestMatch(row['Payee Name'], Object.values(masterData.vendors));
+        } else if (payeeType.includes('employee')) {
+          payeeMatch = findBestMatch(row['Payee Name'], Object.values(masterData.employees));
+        }
+        
+        if (payeeMatch && needsConfirmation(payeeMatch.confidence)) {
+          allWarnings.push(`Fuzzy match: "${row['Payee Name']}" → "${payeeMatch.match.name}" (${Math.round(payeeMatch.confidence * 100)}%)`);
+        } else if (!payeeMatch && payeeType !== 'other') {
+          allWarnings.push(`Payee not found in master data: ${row['Payee Name']}`);
+        }
+        
+        // Validate amount
+        if (row['Type'] && CONFIG.expenseTypes[row['Type']]) {
+          const validation = validateExpenseAmount(row['Type'], row['Amount']);
+          if (validation.warnings) {
+            allWarnings.push(...validation.warnings);
+          }
+        }
+        
+        // Check duplicates
+        const similarExpense = expenses.find(exp => {
+          const sameDate = exp.date === (row['Date'] || formatDate());
+          const sameType = exp.type === row['Type'];
+          const sameAmount = Math.abs(parseFloat(exp.amount) - parseFloat(row['Amount'])) < 0.01;
+          return sameDate && sameType && sameAmount && exp.status !== 'rejected';
+        });
+        
+        if (similarExpense) {
+          allWarnings.push('Possible duplicate expense');
+        }
+        
+        const processedRow = {
+          row: rowNum,
+          data: row,
+          payeeMatch: payeeMatch,
+          warnings: allWarnings
+        };
+        
+        if (allWarnings.length > 0) {
+          results.warnings.push(processedRow);
+        } else {
+          results.valid.push(processedRow);
+        }
       });
-      data.push(row);
+      
+      setBulkUploadResults(results);
+      setErrors([]);
+      
+    } catch (error) {
+      setErrors([`Error reading file: ${error.message}`]);
     }
-    
-    return data;
   };
 
-  // Handle monthly payroll upload
+  // Import bulk expenses
+  const importBulkExpenses = () => {
+    if (!bulkUploadResults) return;
+    
+    const newExpenses = [];
+    const allRows = [...bulkUploadResults.valid, ...bulkUploadResults.warnings];
+    
+    allRows.forEach(item => {
+      const row = item.data;
+      const config = CONFIG.expenseTypes[row['Type']] || CONFIG.expenseTypes['Other'];
+      
+      let payeeName = row['Payee Name'];
+      let payeeId = '';
+      let bankName = '';
+      let ifsc = '';
+      let accountNo = '';
+      let branch = '';
+      
+      if (item.payeeMatch) {
+        const match = item.payeeMatch.match;
+        payeeName = match.name;
+        payeeId = match.id || match.empId || '';
+        bankName = match.bank || match.bankName || '';
+        ifsc = match.ifsc || '';
+        accountNo = match.accountNo || '';
+        branch = match.branch || '';
+      }
+      
+      const forEmployeeId = row['For Employee ID'] || '';
+      let crAccount = currentUser.name;
+      if (forEmployeeId) {
+        const emp = masterData.employees[forEmployeeId];
+        crAccount = emp ? emp.name : currentUser.name;
+      }
+      
+      const expense = {
+        id: generateId('EXP'),
+        date: row['Date'] || new Date().toISOString().split('T')[0],
+        type: row['Type'],
+        payeeType: row['Payee Type']?.toLowerCase() || 'vendor',
+        payeeId: payeeId,
+        payeeName: payeeName,
+        amount: parseFloat(row['Amount']),
+        receiptNo: row['Receipt#'] || '',
+        reason: row['Reason'] || '',
+        narration: row['Narration'] || `${row['Type']} expense - ${payeeName}`,
+        bankName: bankName,
+        ifsc: ifsc,
+        accountNo: accountNo,
+        branch: branch,
+        crAccount: crAccount,
+        drAccount: config.dr,
+        tds: config.tds,
+        tdsRate: config.rate,
+        submittedBy: currentUser.username,
+        submittedByName: currentUser.name,
+        submittedDate: new Date().toISOString(),
+        status: 'pending',
+        warnings: item.warnings || [],
+        source: 'bulk_upload'
+      };
+      
+      newExpenses.push(expense);
+    });
+    
+    setExpenses([...expenses, ...newExpenses]);
+    setBulkUploadResults(null);
+    setShowBulkUpload(false);
+    alert(`✅ Imported ${newExpenses.length} expenses successfully!`);
+  };
+
+  // AI Receipt Reading
+  const processReceiptWithAI = async (file) => {
+    setReceiptProcessing(true);
+    setErrors([]);
+    
+    try {
+      const base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      });
+      
+      const mediaType = file.type;
+      const isImage = mediaType.startsWith('image/');
+      const isPDF = mediaType === 'application/pdf';
+      
+      if (!isImage && !isPDF) {
+        throw new Error('Please upload PDF or image (JPG, PNG)');
+      }
+      
+      const vendorList = Object.values(masterData.vendors).map(v => v.name).join(', ');
+      const expenseTypes = Object.keys(CONFIG.expenseTypes).join(', ');
+      
+      const prompt = `Extract receipt data as JSON only:
+Available types: ${expenseTypes}
+Known vendors: ${vendorList}
+
+Return ONLY this JSON:
+{"date":"DD/MM/YYYY","vendor":"...","amount":0,"billNumber":"...","items":"...","suggestedType":"...","confidence":"high/medium/low"}`;
+
+      const content = [];
+      if (isImage) {
+        content.push({ type: "image", source: { type: "base64", media_type: mediaType, data: base64Data }});
+      } else {
+        content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Data }});
+      }
+      content.push({ type: "text", text: prompt });
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: content }]
+        })
+      });
+
+      if (!response.ok) throw new Error(`AI failed: ${response.status}`);
+
+      const data = await response.json();
+      let responseText = data.content[0].text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const extractedData = JSON.parse(responseText);
+      
+      const vendorMatch = findBestMatch(extractedData.vendor, Object.values(masterData.vendors));
+      
+      setExpenseForm({
+        date: parseDateToISO(extractedData.date) || new Date().toISOString().split('T')[0],
+        type: extractedData.suggestedType || 'Other',
+        payeeType: vendorMatch ? 'vendor' : 'other',
+        payeeId: vendorMatch ? vendorMatch.match.id : '',
+        payeeName: vendorMatch ? vendorMatch.match.name : extractedData.vendor,
+        forSelf: true,
+        forEmployeeId: '',
+        amount: extractedData.amount.toString(),
+        receiptNo: extractedData.billNumber || '',
+        narration: extractedData.items || '',
+        reason: `AI extracted (${extractedData.confidence})`,
+        bankName: vendorMatch ? vendorMatch.match.bank : '',
+        ifsc: vendorMatch ? vendorMatch.match.ifsc : '',
+        accountNo: vendorMatch ? vendorMatch.match.accountNo : '',
+        branch: vendorMatch ? vendorMatch.match.branch : ''
+      });
+      
+      setShowReceiptUpload(false);
+      setReceiptProcessing(false);
+      alert(`✅ Receipt processed! ${vendorMatch ? `Matched: ${vendorMatch.match.name}` : 'Verify details'}`);
+      
+    } catch (error) {
+      setErrors([`AI failed: ${error.message}`]);
+      setReceiptProcessing(false);
+    }
+  };
+
+  const handleReceiptUpload = async (event) => {
+    const file = event.target.files[0];
+    if (file) await processReceiptWithAI(file);
+  };
+
+  // Handle payroll uploads
   const handleMonthlyUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
     try {
       const text = await file.text();
-      const employees = parseExcelData(text);
-      
-      // Import employees to master data
+      const employees = parseCSVData(text);
       const importCount = importEmployeesFromPayroll(employees);
-      
       setPaymentBatch({...paymentBatch, monthly: employees});
       setErrors([]);
-      alert(`✅ Imported ${importCount} employees from monthly payroll to master data`);
+      alert(`✅ Imported ${importCount} employees from monthly payroll`);
     } catch (error) {
-      setErrors([`Error reading monthly file: ${error.message}`]);
+      setErrors([`Error: ${error.message}`]);
     }
   };
 
-  // Handle weekly payroll upload and import to master data
   const handleWeeklyUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
     try {
       const text = await file.text();
-      const employees = parseExcelData(text);
-      
-      // Import employees to master data (same function works for both)
+      const employees = parseCSVData(text);
       const importCount = importEmployeesFromPayroll(employees);
-      
       setPaymentBatch({...paymentBatch, weekly: employees});
       setErrors([]);
-      alert(`✅ Imported ${importCount} employees from weekly payroll to master data`);
+      alert(`✅ Imported ${importCount} employees from weekly payroll`);
     } catch (error) {
-      setErrors([`Error reading weekly file: ${error.message}`]);
+      setErrors([`Error: ${error.message}`]);
     }
   };
 
-  // If not logged in, show login screen
+  // Login Screen
   if (showLogin) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-800">{CONFIG.companyName} Payroll</h1>
-            <p className="text-gray-600 mt-2">Phase 2 - Advanced System</p>
+            <p className="text-gray-600 mt-2">Phase 2.2 - Advanced System</p>
           </div>
           
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Username
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Username</label>
               <input
                 type="text"
                 value={loginForm.username}
@@ -539,9 +544,7 @@ function App() {
             </div>
             
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Password
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
               <div className="relative">
                 <input
                   type={loginForm.showPassword ? "text" : "password"}
@@ -584,7 +587,16 @@ function App() {
     );
   }
 
-  // Main app - logged in
+  // Calculate stats
+  const stats = {
+    pendingExpenses: expenses.filter(e => e.status === 'pending').length,
+    approvedExpenses: expenses.filter(e => e.status === 'approved').length,
+    totalEmployees: Object.keys(masterData.employees).length,
+    totalVendors: Object.keys(masterData.vendors).length,
+    totalExpenses: expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0)
+  };
+
+  // Main App
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-7xl mx-auto">
@@ -592,7 +604,7 @@ function App() {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800">{CONFIG.companyName} Payroll Phase 2</h1>
+              <h1 className="text-3xl font-bold text-gray-800">{CONFIG.companyName} Payroll Phase 2.2</h1>
               <p className="text-gray-600 mt-1">Advanced Expense & Payment Management</p>
             </div>
             <div className="flex items-center gap-4">
@@ -631,7 +643,16 @@ function App() {
               }`}
             >
               <Receipt size={18} />
-              Expenses ({expenses.filter(e => e.status === 'pending').length})
+              Expenses ({stats.pendingExpenses})
+            </button>
+            <button
+              onClick={() => { setCurrentView('expenses'); setShowBulkUpload(true); }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                showBulkUpload ? 'bg-purple-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              <FileSpreadsheet size={18} />
+              Bulk Upload
             </button>
             <button
               onClick={() => setCurrentView('masterdata')}
@@ -654,21 +675,19 @@ function App() {
           </div>
         </div>
 
-        {/* Content Based on View */}
+        {/* Home View */}
         {currentView === 'home' && (
           <div className="space-y-6">
-            <div className="grid md:grid-cols-3 gap-6">
-              {/* Quick Stats */}
+            {/* Stats */}
+            <div className="grid md:grid-cols-4 gap-6">
               <div className="bg-white rounded-lg shadow-lg p-6">
                 <div className="flex items-center gap-4">
-                  <div className="bg-blue-100 p-3 rounded-lg">
-                    <Receipt size={32} className="text-blue-600" />
+                  <div className="bg-yellow-100 p-3 rounded-lg">
+                    <Receipt size={32} className="text-yellow-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Pending Expenses</p>
-                    <p className="text-3xl font-bold text-gray-800">
-                      {expenses.filter(e => e.status === 'pending').length}
-                    </p>
+                    <p className="text-sm text-gray-600">Pending</p>
+                    <p className="text-3xl font-bold text-gray-800">{stats.pendingExpenses}</p>
                   </div>
                 </div>
               </div>
@@ -676,13 +695,23 @@ function App() {
               <div className="bg-white rounded-lg shadow-lg p-6">
                 <div className="flex items-center gap-4">
                   <div className="bg-green-100 p-3 rounded-lg">
-                    <Users size={32} className="text-green-600" />
+                    <CheckCircle size={32} className="text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Approved</p>
+                    <p className="text-3xl font-bold text-gray-800">{stats.approvedExpenses}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <div className="flex items-center gap-4">
+                  <div className="bg-blue-100 p-3 rounded-lg">
+                    <Users size={32} className="text-blue-600" />
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Employees</p>
-                    <p className="text-3xl font-bold text-gray-800">
-                      {Object.keys(masterData.employees).length}
-                    </p>
+                    <p className="text-3xl font-bold text-gray-800">{stats.totalEmployees}</p>
                   </div>
                 </div>
               </div>
@@ -694,237 +723,277 @@ function App() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Vendors</p>
-                    <p className="text-3xl font-bold text-gray-800">
-                      {Object.keys(masterData.vendors).length}
-                    </p>
+                    <p className="text-3xl font-bold text-gray-800">{stats.totalVendors}</p>
                   </div>
                 </div>
               </div>
             </div>
             
+            {/* Feature Highlights */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg shadow-lg p-8">
-              <h2 className="text-2xl font-bold mb-4">✨ Phase 2 Features Active!</h2>
-              <div className="grid md:grid-cols-2 gap-4">
+              <h2 className="text-2xl font-bold mb-4">✨ Phase 2.2 Features Active!</h2>
+              <div className="grid md:grid-cols-2 gap-6">
                 <div>
-                  <h3 className="font-semibold mb-2">✅ What's New:</h3>
-                  <ul className="space-y-1 text-sm">
-                    <li>• Multi-user login system</li>
-                    <li>• Master data management</li>
-                    <li>• Smart expense validation</li>
-                    <li>• Duplicate detection</li>
-                    <li>• Auto-fill from master data</li>
+                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                    <Zap size={20} />
+                    What's New:
+                  </h3>
+                  <ul className="space-y-2 text-sm">
+                    <li>• 📊 Bulk Excel Upload - Import 100+ expenses</li>
+                    <li>• 🤖 AI Receipt Scanner - Automatic data extraction</li>
+                    <li>• 🧠 Smart Matching - Handles typos & variations</li>
+                    <li>• 📥 Download Templates - Pre-filled with your data</li>
+                    <li>• 📤 Export Everything - Backup to Excel</li>
                   </ul>
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-2">🚀 Coming Soon:</h3>
-                  <ul className="space-y-1 text-sm">
-                    <li>• AI receipt reading (PDF/JPEG)</li>
-                    <li>• Bulk Excel upload</li>
-                    <li>• Approval workflow</li>
-                    <li>• Reports & analytics</li>
-                  </ul>
+                  <h3 className="font-semibold mb-3">Quick Actions:</h3>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => downloadExcelTemplate()}
+                      className="w-full bg-white text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition font-semibold text-sm"
+                    >
+                      📥 Download Upload Template
+                    </button>
+                    <button
+                      onClick={() => downloadMasterDataLists(masterData)}
+                      className="w-full bg-white text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition font-semibold text-sm"
+                    >
+                      📋 Download Master Data Lists
+                    </button>
+                    <button
+                      onClick={() => exportExpenses(expenses)}
+                      className="w-full bg-white text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition font-semibold text-sm"
+                    >
+                      📤 Export All Expenses
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Expense View - Continues in next part due to length... */}
-        {currentView === 'expenses' && (
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-2xl font-bold mb-6">Add New Expense</h2>
-            
-            <div className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
-                  <input
-                    type="date"
-                    value={expenseForm.date}
-                    onChange={(e) => setExpenseForm({...expenseForm, date: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Expense Type</label>
-                  <select
-                    value={expenseForm.type}
-                    onChange={(e) => setExpenseForm({...expenseForm, type: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        {/* Expenses View */}
+        {currentView === 'expenses' && !showBulkUpload && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold">Add Expense</h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setShowReceiptUpload(true); document.getElementById('receipt-upload').click(); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+                    disabled={receiptProcessing}
                   >
-                    {Object.keys(CONFIG.expenseTypes).map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
+                    <Camera size={18} />
+                    {receiptProcessing ? 'Processing...' : 'Scan Receipt (AI)'}
+                  </button>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleReceiptUpload}
+                    className="hidden"
+                    id="receipt-upload"
+                  />
                 </div>
               </div>
               
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Pay To</label>
-                  <div className="flex gap-2 mb-2">
-                    <button
-                      onClick={() => setExpenseForm({...expenseForm, payeeType: 'vendor', payeeId: '', payeeName: ''})}
-                      className={`px-4 py-2 rounded ${expenseForm.payeeType === 'vendor' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-                    >
-                      Vendor
-                    </button>
-                    <button
-                      onClick={() => setExpenseForm({...expenseForm, payeeType: 'employee', payeeId: '', payeeName: ''})}
-                      className={`px-4 py-2 rounded ${expenseForm.payeeType === 'employee' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-                    >
-                      Employee
-                    </button>
-                    <button
-                      onClick={() => setExpenseForm({...expenseForm, payeeType: 'other', payeeId: '', payeeName: ''})}
-                      className={`px-4 py-2 rounded ${expenseForm.payeeType === 'other' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-                    >
-                      Other
-                    </button>
+              {errors.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="text-red-600 flex-shrink-0" size={24} />
+                    <div>
+                      <h3 className="font-bold text-red-800 mb-2">Errors</h3>
+                      <ul className="list-disc list-inside text-red-700 space-y-1">
+                        {errors.map((err, idx) => (<li key={idx}>{err}</li>))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
+                    <input
+                      type="date"
+                      value={expenseForm.date}
+                      onChange={(e) => setExpenseForm({...expenseForm, date: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
                   
-                  {expenseForm.payeeType !== 'other' && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Type *</label>
                     <select
-                      value={expenseForm.payeeId}
-                      onChange={handlePayeeSelect}
+                      value={expenseForm.type}
+                      onChange={(e) => setExpenseForm({...expenseForm, type: e.target.value})}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="">Select {expenseForm.payeeType}...</option>
-                      {expenseForm.payeeType === 'vendor' && Object.values(masterData.vendors).map(v => (
-                        <option key={v.id} value={v.id}>{v.name}</option>
+                      {Object.keys(CONFIG.expenseTypes).map(type => (
+                        <option key={type} value={type}>{type}</option>
                       ))}
-                      {expenseForm.payeeType === 'employee' && Object.values(masterData.employees).map(e => (
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Pay To *</label>
+                    <div className="flex gap-2 mb-2">
+                      {['vendor', 'employee', 'other'].map(type => (
+                        <button
+                          key={type}
+                          onClick={() => setExpenseForm({...expenseForm, payeeType: type, payeeId: '', payeeName: ''})}
+                          className={`px-4 py-2 rounded ${expenseForm.payeeType === type ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+                        >
+                          {type.charAt(0).toUpperCase() + type.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {expenseForm.payeeType !== 'other' ? (
+                      <select
+                        value={expenseForm.payeeId}
+                        onChange={handlePayeeSelect}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select...</option>
+                        {expenseForm.payeeType === 'vendor' && Object.values(masterData.vendors).map(v => (
+                          <option key={v.id} value={v.id}>{v.name}</option>
+                        ))}
+                        {expenseForm.payeeType === 'employee' && Object.values(masterData.employees).map(e => (
+                          <option key={e.empId} value={e.empId}>{e.empId} - {e.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={expenseForm.payeeName}
+                        onChange={(e) => setExpenseForm({...expenseForm, payeeName: e.target.value})}
+                        placeholder="Enter payee name"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    )}
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Amount *</label>
+                    <input
+                      type="number"
+                      value={expenseForm.amount}
+                      onChange={(e) => setExpenseForm({...expenseForm, amount: e.target.value})}
+                      placeholder="Enter amount"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                    {expenseForm.amount && (() => {
+                      const validation = validateExpenseAmount(expenseForm.type, expenseForm.amount);
+                      return validation.warnings && validation.warnings.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {validation.warnings.map((warning, idx) => (
+                            <p key={idx} className="text-xs text-orange-600">⚠️ {warning}</p>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">For</label>
+                  <div className="flex items-center gap-4 mb-2">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={expenseForm.forSelf}
+                        onChange={() => setExpenseForm({...expenseForm, forSelf: true, forEmployeeId: ''})}
+                      />
+                      <span>Myself ({currentUser.name})</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={!expenseForm.forSelf}
+                        onChange={() => setExpenseForm({...expenseForm, forSelf: false})}
+                      />
+                      <span>Someone else</span>
+                    </label>
+                  </div>
+                  {!expenseForm.forSelf && (
+                    <select
+                      value={expenseForm.forEmployeeId}
+                      onChange={(e) => setExpenseForm({...expenseForm, forEmployeeId: e.target.value})}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select employee...</option>
+                      {Object.values(masterData.employees).map(e => (
                         <option key={e.empId} value={e.empId}>{e.empId} - {e.name}</option>
                       ))}
                     </select>
                   )}
-                  
-                  {expenseForm.payeeType === 'other' && (
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Receipt #</label>
                     <input
                       type="text"
-                      value={expenseForm.payeeName}
-                      onChange={(e) => setExpenseForm({...expenseForm, payeeName: e.target.value})}
-                      placeholder="Enter payee name"
+                      value={expenseForm.receiptNo}
+                      onChange={(e) => setExpenseForm({...expenseForm, receiptNo: e.target.value})}
+                      placeholder="Bill/Invoice number"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Amount</label>
-                  <input
-                    type="number"
-                    value={expenseForm.amount}
-                    onChange={(e) => setExpenseForm({...expenseForm, amount: e.target.value})}
-                    placeholder="Enter amount"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                  {expenseForm.amount && (() => {
-                    const validation = validateExpenseAmount(expenseForm.type, expenseForm.amount);
-                    return validation.warnings && validation.warnings.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {validation.warnings.map((warning, idx) => (
-                          <p key={idx} className="text-xs text-orange-600">⚠️ {warning}</p>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Expense For</label>
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2">
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Reason</label>
                     <input
-                      type="radio"
-                      checked={expenseForm.forSelf}
-                      onChange={() => setExpenseForm({...expenseForm, forSelf: true, forEmployeeId: ''})}
+                      type="text"
+                      value={expenseForm.reason}
+                      onChange={(e) => setExpenseForm({...expenseForm, reason: e.target.value})}
+                      placeholder="Purpose"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
-                    <span>Myself ({currentUser.name})</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      checked={!expenseForm.forSelf}
-                      onChange={() => setExpenseForm({...expenseForm, forSelf: false})}
-                    />
-                    <span>Someone else</span>
-                  </label>
-                </div>
-                {!expenseForm.forSelf && (
-                  <select
-                    value={expenseForm.forEmployeeId}
-                    onChange={(e) => setExpenseForm({...expenseForm, forEmployeeId: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 mt-2"
-                  >
-                    <option value="">Select employee...</option>
-                    {Object.values(masterData.employees).map(e => (
-                      <option key={e.empId} value={e.empId}>{e.empId} - {e.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-              
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Receipt/Bill Number</label>
-                  <input
-                    type="text"
-                    value={expenseForm.receiptNo}
-                    onChange={(e) => setExpenseForm({...expenseForm, receiptNo: e.target.value})}
-                    placeholder="Enter receipt number"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Reason</label>
-                  <input
-                    type="text"
-                    value={expenseForm.reason}
-                    onChange={(e) => setExpenseForm({...expenseForm, reason: e.target.value})}
-                    placeholder="Reason for expense"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Narration</label>
-                <textarea
-                  value={expenseForm.narration}
-                  onChange={(e) => setExpenseForm({...expenseForm, narration: e.target.value})}
-                  placeholder="Detailed narration"
-                  rows={2}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              {expenseForm.payeeId && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="text-sm font-semibold text-green-800 mb-2">✅ Auto-filled bank details:</p>
-                  <div className="grid md:grid-cols-2 gap-2 text-sm text-green-700">
-                    <p>Bank: {expenseForm.bankName}</p>
-                    <p>IFSC: {expenseForm.ifsc}</p>
-                    <p>Account: {expenseForm.accountNo}</p>
-                    <p>Branch: {expenseForm.branch}</p>
                   </div>
                 </div>
-              )}
-              
-              <button
-                onClick={addExpense}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition font-semibold"
-              >
-                Add to Expense Queue
-              </button>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Narration</label>
+                  <textarea
+                    value={expenseForm.narration}
+                    onChange={(e) => setExpenseForm({...expenseForm, narration: e.target.value})}
+                    placeholder="Details"
+                    rows={2}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                
+                {expenseForm.payeeId && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-sm font-semibold text-green-800 mb-2">✅ Auto-filled:</p>
+                    <div className="grid md:grid-cols-2 gap-2 text-sm text-green-700">
+                      <p>Bank: {expenseForm.bankName}</p>
+                      <p>IFSC: {expenseForm.ifsc}</p>
+                      <p>Account: {expenseForm.accountNo}</p>
+                      <p>Branch: {expenseForm.branch}</p>
+                    </div>
+                  </div>
+                )}
+                
+                <button
+                  onClick={addExpense}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition font-semibold"
+                >
+                  Add to Queue
+                </button>
+              </div>
             </div>
             
-            {/* Pending Expenses List */}
+            {/* Pending Expenses */}
             {expenses.filter(e => e.status === 'pending').length > 0 && (
-              <div className="mt-8">
+              <div className="bg-white rounded-lg shadow-lg p-6">
                 <h3 className="text-xl font-bold mb-4">Pending Expenses ({expenses.filter(e => e.status === 'pending').length})</h3>
                 <div className="space-y-3">
                   {expenses.filter(e => e.status === 'pending').map(exp => (
@@ -932,10 +1001,11 @@ function App() {
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <span className="font-semibold text-gray-800">{exp.type}</span>
-                            <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded">{exp.status}</span>
+                            <span className="font-semibold">{exp.type}</span>
                             {exp.warnings && exp.warnings.length > 0 && (
-                              <span className="text-xs bg-orange-200 text-orange-800 px-2 py-1 rounded">⚠️ {exp.warnings.length} warning(s)</span>
+                              <span className="text-xs bg-orange-200 text-orange-800 px-2 py-1 rounded">
+                                ⚠️ {exp.warnings.length} warning(s)
+                              </span>
                             )}
                           </div>
                           <p className="text-sm text-gray-700">
@@ -944,45 +1014,28 @@ function App() {
                           <p className="text-xs text-gray-600 mt-1">
                             Dr: {exp.drAccount} | Cr: {exp.crAccount}
                           </p>
-                          {exp.reason && (
-                            <p className="text-xs text-gray-600 mt-1">Reason: {exp.reason}</p>
-                          )}
-                          {exp.warnings && exp.warnings.length > 0 && (
-                            <div className="mt-2 space-y-1">
-                              {exp.warnings.map((warning, idx) => (
-                                <p key={idx} className="text-xs text-orange-600">⚠️ {warning}</p>
+                          {exp.reason && <p className="text-xs text-gray-600">Reason: {exp.reason}</p>}
+                        </div>
+                        {currentUser.role === 'admin' && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setExpenses(expenses.map(e => 
+                                e.id === exp.id ? {...e, status: 'approved', approvedBy: currentUser.username, approvedDate: new Date().toISOString()} : e
                               ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          {currentUser.role === 'admin' && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  const updated = expenses.map(e => 
-                                    e.id === exp.id ? {...e, status: 'approved', approvedBy: currentUser.username, approvedDate: new Date().toISOString()} : e
-                                  );
-                                  setExpenses(updated);
-                                }}
-                                className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
-                              >
-                                ✓ Approve
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const updated = expenses.map(e => 
-                                    e.id === exp.id ? {...e, status: 'rejected', rejectedBy: currentUser.username, rejectedDate: new Date().toISOString()} : e
-                                  );
-                                  setExpenses(updated);
-                                }}
-                                className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
-                              >
-                                ✗ Reject
-                              </button>
-                            </>
-                          )}
-                        </div>
+                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => setExpenses(expenses.map(e => 
+                                e.id === exp.id ? {...e, status: 'rejected', rejectedBy: currentUser.username} : e
+                              ))}
+                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                            >
+                              ✗
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -992,25 +1045,147 @@ function App() {
           </div>
         )}
 
+        {/* Bulk Upload View */}
+        {showBulkUpload && (
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold">Bulk Excel Upload</h2>
+              <button
+                onClick={() => { setShowBulkUpload(false); setBulkUploadResults(null); }}
+                className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                ← Back
+              </button>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              <div className="flex gap-4">
+                <button
+                  onClick={downloadExcelTemplate}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  <Download size={20} />
+                  Download Template
+                </button>
+                <button
+                  onClick={() => downloadMasterDataLists(masterData)}
+                  className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                >
+                  <List size={20} />
+                  Download Master Data Lists
+                </button>
+              </div>
+              
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleBulkUpload}
+                  className="hidden"
+                  id="bulk-upload"
+                />
+                <label
+                  htmlFor="bulk-upload"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 cursor-pointer transition"
+                >
+                  <Upload size={20} />
+                  Upload Excel/CSV File
+                </label>
+                <p className="text-xs text-gray-500 mt-2">CSV format, max 1000 rows</p>
+              </div>
+            </div>
+            
+            {bulkUploadResults && (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h3 className="font-bold text-blue-900 mb-2">Upload Results</h3>
+                  <div className="grid md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="text-blue-700">Total Rows: <strong>{bulkUploadResults.total}</strong></p>
+                    </div>
+                    <div>
+                      <p className="text-green-700">Valid: <strong>{bulkUploadResults.valid.length}</strong></p>
+                    </div>
+                    <div>
+                      <p className="text-orange-700">Warnings: <strong>{bulkUploadResults.warnings.length}</strong></p>
+                    </div>
+                    {bulkUploadResults.errors.length > 0 && (
+                      <div>
+                        <p className="text-red-700">Errors: <strong>{bulkUploadResults.errors.length}</strong></p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {bulkUploadResults.errors.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <h4 className="font-bold text-red-800 mb-2">Errors (Fix These)</h4>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {bulkUploadResults.errors.map((err, idx) => (
+                        <div key={idx} className="text-sm text-red-700">
+                          <p className="font-semibold">Row {err.row}: {err.data['Payee Name']}</p>
+                          <ul className="list-disc list-inside ml-4">
+                            {err.errors.map((e, i) => <li key={i}>{e}</li>)}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {bulkUploadResults.warnings.length > 0 && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <h4 className="font-bold text-orange-800 mb-2">Warnings (Review These)</h4>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {bulkUploadResults.warnings.map((warn, idx) => (
+                        <div key={idx} className="text-sm text-orange-700">
+                          <p className="font-semibold">Row {warn.row}: {warn.data['Payee Name']} - ₹{warn.data['Amount']}</p>
+                          <ul className="list-disc list-inside ml-4">
+                            {warn.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {(bulkUploadResults.valid.length > 0 || bulkUploadResults.warnings.length > 0) && (
+                  <button
+                    onClick={importBulkExpenses}
+                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg hover:from-purple-700 hover:to-pink-700 transition font-semibold"
+                  >
+                    Import {bulkUploadResults.valid.length + bulkUploadResults.warnings.length} Expenses
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Master Data View */}
         {currentView === 'masterdata' && (
           <div className="space-y-6">
             <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-2xl font-bold mb-4">Employees ({Object.keys(masterData.employees).length})</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold">Employees ({Object.keys(masterData.employees).length})</h2>
+                <button
+                  onClick={() => exportMasterData(masterData)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  <Download size={18} />
+                  Export
+                </button>
+              </div>
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {Object.values(masterData.employees).map(emp => (
                   <div key={emp.empId} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-semibold">{emp.empId} - {emp.name}</p>
-                        <p className="text-sm text-gray-600">{emp.department} | {emp.designation}</p>
-                        <p className="text-xs text-gray-500">{emp.bankName} - {emp.ifsc} - {emp.accountNo}</p>
-                      </div>
-                    </div>
+                    <p className="font-semibold">{emp.empId} - {emp.name}</p>
+                    <p className="text-sm text-gray-600">{emp.department} | {emp.designation}</p>
+                    <p className="text-xs text-gray-500">{emp.bankName} - {emp.ifsc} - {emp.accountNo}</p>
                   </div>
                 ))}
                 {Object.keys(masterData.employees).length === 0 && (
-                  <p className="text-gray-500 text-center py-8">No employees yet. Upload monthly payroll to import.</p>
+                  <p className="text-gray-500 text-center py-8">No employees. Upload payroll to import.</p>
                 )}
               </div>
             </div>
@@ -1020,14 +1195,13 @@ function App() {
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {Object.values(masterData.vendors).map(vendor => (
                   <div key={vendor.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between">
                       <div>
                         <p className="font-semibold">{vendor.name}</p>
                         <p className="text-xs text-gray-500">{vendor.bank} - {vendor.ifsc} - {vendor.accountNo}</p>
-                        <p className="text-xs text-gray-400">{vendor.branch}</p>
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        vendor.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      <span className={`text-xs px-2 py-1 rounded h-fit ${
+                        vendor.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100'
                       }`}>
                         {vendor.status}
                       </span>
@@ -1042,82 +1216,64 @@ function App() {
         {/* Payroll View */}
         {currentView === 'payroll' && (
           <div className="space-y-6">
-            {/* Monthly Payroll Import */}
             <div className="bg-white rounded-lg shadow-lg p-6">
               <h2 className="text-2xl font-bold mb-4">Import Monthly Payroll</h2>
-              <p className="text-gray-600 mb-4">Upload your monthly payroll CSV to automatically import/update employees in master data</p>
-              
+              <p className="text-gray-600 mb-4">Automatically imports employees to master data</p>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
                 <input
                   type="file"
                   accept=".csv"
                   onChange={handleMonthlyUpload}
                   className="hidden"
-                  id="monthly-payroll-upload"
+                  id="monthly-upload"
                 />
                 <label
-                  htmlFor="monthly-payroll-upload"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition"
+                  htmlFor="monthly-upload"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer"
                 >
                   <Upload size={20} />
-                  Upload Monthly Payroll CSV
+                  Upload Monthly CSV
                 </label>
-                <p className="text-xs text-gray-500 mt-2">Employee bank details will be automatically imported/updated</p>
               </div>
-              
               {paymentBatch.monthly && (
-                <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="font-semibold text-green-800">✅ Monthly payroll loaded: {paymentBatch.monthly.length} rows</p>
-                  <p className="text-sm text-green-700 mt-2">Employees have been imported to master data</p>
+                <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="font-semibold text-green-800">✅ Loaded: {paymentBatch.monthly.length} rows</p>
                 </div>
               )}
             </div>
-
-            {/* Weekly Payroll Import */}
+            
             <div className="bg-white rounded-lg shadow-lg p-6">
               <h2 className="text-2xl font-bold mb-4">Import Weekly Payroll</h2>
-              <p className="text-gray-600 mb-4">Upload your weekly payroll CSV to automatically import/update employees in master data</p>
-              
+              <p className="text-gray-600 mb-4">Automatically imports employees to master data</p>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
                 <input
                   type="file"
                   accept=".csv"
                   onChange={handleWeeklyUpload}
                   className="hidden"
-                  id="weekly-payroll-upload"
+                  id="weekly-upload"
                 />
                 <label
-                  htmlFor="weekly-payroll-upload"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 cursor-pointer transition"
+                  htmlFor="weekly-upload"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 cursor-pointer"
                 >
                   <Upload size={20} />
-                  Upload Weekly Payroll CSV
+                  Upload Weekly CSV
                 </label>
-                <p className="text-xs text-gray-500 mt-2">Employee bank details will be automatically imported/updated</p>
               </div>
-              
               {paymentBatch.weekly && (
-                <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="font-semibold text-green-800">✅ Weekly payroll loaded: {paymentBatch.weekly.length} rows</p>
-                  <p className="text-sm text-green-700 mt-2">Employees have been imported to master data</p>
+                <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="font-semibold text-green-800">✅ Loaded: {paymentBatch.weekly.length} rows</p>
                 </div>
               )}
             </div>
-
-            {/* Info Box */}
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
-              <h3 className="font-bold text-blue-900 mb-3">📋 How Import Works</h3>
-              <ul className="space-y-2 text-blue-800 text-sm">
-                <li>• Upload either monthly OR weekly payroll (or both!)</li>
-                <li>• System extracts employees with Emp ID starting with "E"</li>
-                <li>• Bank details (Name, IFSC, Account, Branch) automatically saved</li>
-                <li>• If employee already exists, bank details get updated</li>
-                <li>• Once imported, use employees in expense management</li>
-                <li>• Bank details auto-fill when you select an employee</li>
-              </ul>
-            </div>
           </div>
         )}
+
+        {/* Footer */}
+        <div className="mt-8 text-center text-gray-600 text-sm">
+          <p>On Cloud Payroll Phase 2.2 | All data stored locally in browser</p>
+        </div>
       </div>
     </div>
   );

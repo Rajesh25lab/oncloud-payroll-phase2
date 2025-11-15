@@ -1,7 +1,7 @@
 {
   "name": "oncloud-payroll-phase2",
-  "version": "2.1.0",
-  "description": "On Cloud Payroll Processing System - Consolidated batch payment processing",
+  "version": "2.2.0",
+  "description": "On Cloud Payroll Phase 2.2 - Advanced Expense & Payment Management with AI",
   "type": "module",
   "scripts": {
     "dev": "vite",
