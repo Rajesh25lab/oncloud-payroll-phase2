@@ -303,6 +303,12 @@ function App() {
 
   // Approve expense
   const approveExpense = (expenseId) => {
+    // Check permission
+    if (!requirePermission(currentUser, 'approve', 'expense')) {
+      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'expense', expenseId, null, { action: 'approve' }, currentUser, false, 'Insufficient permissions');
+      return;
+    }
+    
     const expense = expenses.find(e => e.id === expenseId);
     const updatedExpense = {
       ...expense,
@@ -320,6 +326,12 @@ function App() {
 
   // Reject expense
   const rejectExpense = (expenseId) => {
+    // Check permission
+    if (!requirePermission(currentUser, 'approve', 'expense')) {
+      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'expense', expenseId, null, { action: 'reject' }, currentUser, false, 'Insufficient permissions');
+      return;
+    }
+    
     const expense = expenses.find(e => e.id === expenseId);
     const updatedExpense = {
       ...expense,
@@ -706,6 +718,12 @@ function App() {
 
   // Add vendor manually
   const addVendor = () => {
+    // Check permission
+    if (!requirePermission(currentUser, 'create', 'vendor')) {
+      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'vendor', null, null, { action: 'create' }, currentUser, false, 'Insufficient permissions');
+      return;
+    }
+    
     const { name, bank, ifsc, accountNo } = vendorForm;
     
     if (!name || !bank || !ifsc || !accountNo) {
@@ -742,6 +760,12 @@ function App() {
 
   // Add employee manually
   const addEmployee = () => {
+    // Check permission
+    if (!requirePermission(currentUser, 'create', 'employee')) {
+      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'employee', null, null, { action: 'create' }, currentUser, false, 'Insufficient permissions');
+      return;
+    }
+    
     const { empId, name, bankName, ifsc, accountNo } = employeeForm;
     
     if (!empId || !name || !bankName || !ifsc || !accountNo) {
@@ -1016,7 +1040,20 @@ Return ONLY this JSON:
               <div className="text-right">
                 <p className="text-sm text-gray-600">Logged in as</p>
                 <p className="font-semibold text-gray-800">{currentUser.name}</p>
-                <p className="text-xs text-gray-500">{currentUser.role}</p>
+                <div className="flex items-center gap-2 justify-end mt-1">
+                  <span className={`text-xs px-2 py-1 rounded font-semibold ${
+                    currentUser.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                    currentUser.role === 'manager' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {ROLE_NAMES[currentUser.role] || currentUser.role}
+                  </span>
+                  {currentUser.role !== 'admin' && (
+                    <span className="text-xs text-gray-500" title="Read-only access to master data">
+                      🔒 Limited
+                    </span>
+                  )}
+                </div>
               </div>
               <button 
                 onClick={handleLogout}
@@ -1077,7 +1114,7 @@ Return ONLY this JSON:
               <FileSpreadsheet size={18} />
               Files ({fileLogs.length})
             </button>
-            {hasPermission(currentUser, 'audit', 'view') && (
+            {currentUser.role === 'admin' && (
               <button
                 onClick={() => setCurrentView('audit')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
@@ -1086,6 +1123,17 @@ Return ONLY this JSON:
               >
                 <List size={18} />
                 Audit Log
+              </button>
+            )}
+            {currentUser.role === 'admin' && (
+              <button
+                onClick={() => setCurrentView('settings')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                  currentView === 'settings' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+              >
+                <Settings size={18} />
+                Settings
               </button>
             )}
           </div>
@@ -1415,7 +1463,7 @@ Return ONLY this JSON:
                           </p>
                           {exp.reason && <p className="text-xs text-gray-600">Reason: {exp.reason}</p>}
                         </div>
-                        {currentUser.role === 'admin' && (
+                        {hasPermission(currentUser, 'approve', 'expense') && (
                           <div className="flex gap-2">
                             <button
                               onClick={() => approveExpense(exp.id)}
@@ -1521,13 +1569,15 @@ Return ONLY this JSON:
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Employees ({Object.keys(masterData.employees).length})</h2>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowEmployeeForm(!showEmployeeForm)}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                  >
-                    <Plus size={18} />
-                    Add Employee
-                  </button>
+                  {hasPermission(currentUser, 'create', 'employee') && (
+                    <button
+                      onClick={() => setShowEmployeeForm(!showEmployeeForm)}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                    >
+                      <Plus size={18} />
+                      Add Employee
+                    </button>
+                  )}
                   <button
                     onClick={() => downloadEmployeeTemplate()}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -1535,16 +1585,18 @@ Return ONLY this JSON:
                     <Download size={18} />
                     Template
                   </button>
-                  <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
-                    <Upload size={18} />
-                    Import
-                    <input
-                      type="file"
-                      accept=".csv"
-                      onChange={handleEmployeeImport}
-                      className="hidden"
-                    />
-                  </label>
+                  {hasPermission(currentUser, 'create', 'employee') && (
+                    <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                      <Upload size={18} />
+                      Import
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleEmployeeImport}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
                   <button
                     onClick={() => exportMasterData(masterData)}
                     className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
@@ -1684,9 +1736,17 @@ Return ONLY this JSON:
                 </div>
               )}
               
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-800">
-                💡 <strong>Single:</strong> Click "Add Employee" → Fill form → Save | <strong>Bulk:</strong> Click "Template" → Fill CSV → Click "Import" | <strong>Or:</strong> Import from Payroll tab
-              </div>
+              {!hasPermission(currentUser, 'create', 'employee') && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm text-yellow-800">
+                  ℹ️ <strong>Read-Only Access:</strong> You can view employees but only administrators can add or edit them.
+                </div>
+              )}
+              
+              {hasPermission(currentUser, 'create', 'employee') && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-800">
+                  💡 <strong>Single:</strong> Click "Add Employee" → Fill form → Save | <strong>Bulk:</strong> Click "Template" → Fill CSV → Click "Import" | <strong>Or:</strong> Import from Payroll tab
+                </div>
+              )}
               
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {Object.values(masterData.employees).map(emp => (
@@ -1707,13 +1767,15 @@ Return ONLY this JSON:
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Vendors ({Object.keys(masterData.vendors).length})</h2>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowVendorForm(!showVendorForm)}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                  >
-                    <Plus size={18} />
-                    Add Vendor
-                  </button>
+                  {hasPermission(currentUser, 'create', 'vendor') && (
+                    <button
+                      onClick={() => setShowVendorForm(!showVendorForm)}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                    >
+                      <Plus size={18} />
+                      Add Vendor
+                    </button>
+                  )}
                   <button
                     onClick={() => downloadVendorTemplate()}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -1721,16 +1783,18 @@ Return ONLY this JSON:
                     <Download size={18} />
                     Template
                   </button>
-                  <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
-                    <Upload size={18} />
-                    Import
-                    <input
-                      type="file"
-                      accept=".csv"
-                      onChange={handleVendorImport}
-                      className="hidden"
-                    />
-                  </label>
+                  {hasPermission(currentUser, 'create', 'vendor') && (
+                    <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                      <Upload size={18} />
+                      Import
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleVendorImport}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
                 </div>
               </div>
               
@@ -1827,9 +1891,17 @@ Return ONLY this JSON:
                 </div>
               )}
               
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-800">
-                💡 <strong>Single:</strong> Click "Add Vendor" → Fill form → Save | <strong>Bulk:</strong> Click "Template" → Fill CSV → Click "Import"
-              </div>
+              {!hasPermission(currentUser, 'create', 'vendor') && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm text-yellow-800">
+                  ℹ️ <strong>Read-Only Access:</strong> You can view vendors but only administrators can add or edit them.
+                </div>
+              )}
+              
+              {hasPermission(currentUser, 'create', 'vendor') && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-800">
+                  💡 <strong>Single:</strong> Click "Add Vendor" → Fill form → Save | <strong>Bulk:</strong> Click "Template" → Fill CSV → Click "Import"
+                </div>
+              )}
               
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {Object.values(masterData.vendors).map(vendor => (
@@ -2124,6 +2196,172 @@ Return ONLY this JSON:
                     )}
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Settings View - Admin Only */}
+        {currentView === 'settings' && (
+          <div className="space-y-6">
+            {currentUser.role !== 'admin' ? (
+              <div className="bg-white rounded-lg shadow-lg p-12 text-center">
+                <AlertCircle size={64} className="mx-auto mb-4 text-red-500" />
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h3>
+                <p className="text-gray-600">Only administrators can access settings.</p>
+                <button
+                  onClick={() => setCurrentView('home')}
+                  className="mt-6 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Go to Home
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* System Information */}
+                <div className="bg-white rounded-lg shadow-lg p-6">
+                  <h2 className="text-2xl font-bold mb-6">System Information</h2>
+                  <div className="grid md:grid-cols-3 gap-6">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <p className="text-sm text-blue-600 mb-1">Total Users</p>
+                      <p className="text-3xl font-bold text-blue-900">{Object.keys(masterData.users).length}</p>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <p className="text-sm text-green-600 mb-1">Audit Events</p>
+                      <p className="text-3xl font-bold text-green-900">{auditLogs.length}</p>
+                    </div>
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                      <p className="text-sm text-purple-600 mb-1">Files Tracked</p>
+                      <p className="text-3xl font-bold text-purple-900">{fileLogs.length}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Role & Permissions Reference */}
+                <div className="bg-white rounded-lg shadow-lg p-6">
+                  <h2 className="text-2xl font-bold mb-6">Roles & Permissions</h2>
+                  <div className="space-y-4">
+                    {/* Admin Role */}
+                    <div className="border-2 border-purple-200 rounded-lg p-4 bg-purple-50">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="px-3 py-1 bg-purple-600 text-white rounded-lg font-semibold">
+                          Administrator
+                        </span>
+                        <span className="text-sm text-purple-700">Full System Access</span>
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-2 text-sm text-purple-800">
+                        <div>✅ Add/Edit Vendors</div>
+                        <div>✅ Add/Edit Employees</div>
+                        <div>✅ Add/Approve Expenses</div>
+                        <div>✅ View Audit Logs</div>
+                        <div>✅ Manage Users</div>
+                        <div>✅ Upload Files</div>
+                        <div>✅ Export All Data</div>
+                        <div>✅ Access Settings</div>
+                      </div>
+                    </div>
+
+                    {/* Manager Role */}
+                    <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="px-3 py-1 bg-blue-600 text-white rounded-lg font-semibold">
+                          Manager
+                        </span>
+                        <span className="text-sm text-blue-700">Expense Management Access</span>
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-2 text-sm text-blue-800">
+                        <div>✅ Add Expenses</div>
+                        <div>✅ Approve/Reject Expenses</div>
+                        <div>✅ View Master Data (Read-Only)</div>
+                        <div>✅ Upload Files</div>
+                        <div>✅ View Own Activity</div>
+                        <div>❌ Cannot Edit Master Data</div>
+                        <div>❌ Cannot View Full Audit Log</div>
+                        <div>❌ Cannot Access Settings</div>
+                      </div>
+                    </div>
+
+                    {/* User Role */}
+                    <div className="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="px-3 py-1 bg-gray-600 text-white rounded-lg font-semibold">
+                          User
+                        </span>
+                        <span className="text-sm text-gray-700">Basic Access</span>
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-2 text-sm text-gray-800">
+                        <div>✅ Add Expenses</div>
+                        <div>✅ View Own Expenses</div>
+                        <div>✅ View Master Data (Read-Only)</div>
+                        <div>✅ Download Templates</div>
+                        <div>❌ Cannot Approve Expenses</div>
+                        <div>❌ Cannot Edit Master Data</div>
+                        <div>❌ Cannot View Audit Logs</div>
+                        <div>❌ Cannot Access Settings</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Current Users */}
+                <div className="bg-white rounded-lg shadow-lg p-6">
+                  <h2 className="text-2xl font-bold mb-6">Current Users</h2>
+                  <div className="space-y-3">
+                    {Object.values(masterData.users).map(user => (
+                      <div key={user.username} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-gray-50">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${
+                            user.role === 'admin' ? 'bg-purple-600' :
+                            user.role === 'manager' ? 'bg-blue-600' :
+                            'bg-gray-600'
+                          }`}>
+                            {user.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900">{user.name}</p>
+                            <p className="text-sm text-gray-600">@{user.username}</p>
+                          </div>
+                        </div>
+                        <span className={`px-3 py-1 rounded-lg font-semibold text-sm ${
+                          user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                          user.role === 'manager' ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {ROLE_NAMES[user.role] || user.role}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>Note:</strong> To add more users or change roles, update the <code className="bg-blue-100 px-2 py-1 rounded">config/constants.js</code> file.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Data Summary */}
+                <div className="bg-white rounded-lg shadow-lg p-6">
+                  <h2 className="text-2xl font-bold mb-6">Data Summary</h2>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                      <p className="text-sm text-gray-600 mb-1">Vendors</p>
+                      <p className="text-2xl font-bold text-gray-900">{Object.keys(masterData.vendors).length}</p>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                      <p className="text-sm text-gray-600 mb-1">Employees</p>
+                      <p className="text-2xl font-bold text-gray-900">{Object.keys(masterData.employees).length}</p>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                      <p className="text-sm text-gray-600 mb-1">Total Expenses</p>
+                      <p className="text-2xl font-bold text-gray-900">{expenses.length}</p>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                      <p className="text-sm text-gray-600 mb-1">Pending Expenses</p>
+                      <p className="text-2xl font-bold text-gray-900">{expenses.filter(e => e.status === 'pending').length}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
