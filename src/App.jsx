@@ -487,9 +487,29 @@ function App() {
       
       setPaymentBatch({...paymentBatch, monthly: employees});
       setErrors([]);
-      alert(`✅ Imported ${importCount} employees to master data`);
+      alert(`✅ Imported ${importCount} employees from monthly payroll to master data`);
     } catch (error) {
       setErrors([`Error reading monthly file: ${error.message}`]);
+    }
+  };
+
+  // Handle weekly payroll upload and import to master data
+  const handleWeeklyUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const employees = parseExcelData(text);
+      
+      // Import employees to master data (same function works for both)
+      const importCount = importEmployeesFromPayroll(employees);
+      
+      setPaymentBatch({...paymentBatch, weekly: employees});
+      setErrors([]);
+      alert(`✅ Imported ${importCount} employees from weekly payroll to master data`);
+    } catch (error) {
+      setErrors([`Error reading weekly file: ${error.message}`]);
     }
   };
 
@@ -1021,34 +1041,81 @@ function App() {
 
         {/* Payroll View */}
         {currentView === 'payroll' && (
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-2xl font-bold mb-4">Import Payroll</h2>
-            <p className="text-gray-600 mb-4">Upload your monthly payroll CSV to automatically import employees to master data</p>
-            
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleMonthlyUpload}
-                className="hidden"
-                id="payroll-upload"
-              />
-              <label
-                htmlFor="payroll-upload"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition"
-              >
-                <Upload size={20} />
-                Upload Monthly Payroll CSV
-              </label>
-              <p className="text-xs text-gray-500 mt-2">Employee bank details will be automatically imported/updated</p>
-            </div>
-            
-            {paymentBatch.monthly && (
-              <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="font-semibold text-green-800">✅ Payroll loaded: {paymentBatch.monthly.length} employees</p>
-                <p className="text-sm text-green-700 mt-2">Employees have been imported to master data</p>
+          <div className="space-y-6">
+            {/* Monthly Payroll Import */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-2xl font-bold mb-4">Import Monthly Payroll</h2>
+              <p className="text-gray-600 mb-4">Upload your monthly payroll CSV to automatically import/update employees in master data</p>
+              
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleMonthlyUpload}
+                  className="hidden"
+                  id="monthly-payroll-upload"
+                />
+                <label
+                  htmlFor="monthly-payroll-upload"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition"
+                >
+                  <Upload size={20} />
+                  Upload Monthly Payroll CSV
+                </label>
+                <p className="text-xs text-gray-500 mt-2">Employee bank details will be automatically imported/updated</p>
               </div>
-            )}
+              
+              {paymentBatch.monthly && (
+                <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="font-semibold text-green-800">✅ Monthly payroll loaded: {paymentBatch.monthly.length} rows</p>
+                  <p className="text-sm text-green-700 mt-2">Employees have been imported to master data</p>
+                </div>
+              )}
+            </div>
+
+            {/* Weekly Payroll Import */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-2xl font-bold mb-4">Import Weekly Payroll</h2>
+              <p className="text-gray-600 mb-4">Upload your weekly payroll CSV to automatically import/update employees in master data</p>
+              
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleWeeklyUpload}
+                  className="hidden"
+                  id="weekly-payroll-upload"
+                />
+                <label
+                  htmlFor="weekly-payroll-upload"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 cursor-pointer transition"
+                >
+                  <Upload size={20} />
+                  Upload Weekly Payroll CSV
+                </label>
+                <p className="text-xs text-gray-500 mt-2">Employee bank details will be automatically imported/updated</p>
+              </div>
+              
+              {paymentBatch.weekly && (
+                <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="font-semibold text-green-800">✅ Weekly payroll loaded: {paymentBatch.weekly.length} rows</p>
+                  <p className="text-sm text-green-700 mt-2">Employees have been imported to master data</p>
+                </div>
+              )}
+            </div>
+
+            {/* Info Box */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
+              <h3 className="font-bold text-blue-900 mb-3">📋 How Import Works</h3>
+              <ul className="space-y-2 text-blue-800 text-sm">
+                <li>• Upload either monthly OR weekly payroll (or both!)</li>
+                <li>• System extracts employees with Emp ID starting with "E"</li>
+                <li>• Bank details (Name, IFSC, Account, Branch) automatically saved</li>
+                <li>• If employee already exists, bank details get updated</li>
+                <li>• Once imported, use employees in expense management</li>
+                <li>• Bank details auto-fill when you select an employee</li>
+              </ul>
+            </div>
           </div>
         )}
       </div>
