@@ -8,7 +8,6 @@ import { downloadExpenseTemplate, downloadVendorTemplate, downloadEmployeeTempla
 import { saveToStorage, loadFromStorage } from './utils/storage';
 import { CONFIG, INITIAL_VENDORS, DEFAULT_USER } from './config/constants';
 import { logFileOperation, logAudit, hasPermission, requirePermission, searchFiles, searchAuditLogs, exportAuditLogs, getCategoryIcon, getStatusColor, formatFileSize, formatRelativeTime, ROLE_NAMES } from './utils/enterpriseUtils';
-import { createAuditLog, createFileLog, hasPermission, formatAuditLog, filterAuditLogs, filterFileLogs, exportAuditLogToCSV, exportFileLogToCSV } from './utils/auditUtils';
 
 function App() {
   // Authentication state
