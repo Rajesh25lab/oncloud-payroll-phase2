@@ -7,6 +7,8 @@ import { validateExpenseAmount, checkDuplicateExpense, validateBulkRow, formatDa
 import { downloadExpenseTemplate, downloadVendorTemplate, downloadEmployeeTemplate, downloadMasterDataLists, exportExpenses, exportMasterData, parseCSVData, generateId, generateJournalNumber } from './utils/exportUtils';
 import { saveToStorage, loadFromStorage } from './utils/storage';
 import { CONFIG, INITIAL_VENDORS, DEFAULT_USER } from './config/constants';
+import { logFileOperation, logAudit, hasPermission, requirePermission, searchFiles, searchAuditLogs, exportAuditLogs, getCategoryIcon, getStatusColor, formatFileSize, formatRelativeTime, ROLE_NAMES } from './utils/enterpriseUtils';
+import { createAuditLog, createFileLog, hasPermission, formatAuditLog, filterAuditLogs, filterFileLogs, exportAuditLogToCSV, exportFileLogToCSV } from './utils/auditUtils';
 
 function App() {
   // Authentication state
@@ -24,6 +26,10 @@ function App() {
   
   // Expense state
   const [expenses, setExpenses] = useState([]);
+  
+  // Enterprise modules state
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [fileLogs, setFileLogs] = useState([]);
   const [expenseForm, setExpenseForm] = useState({
     date: new Date().toISOString().split('T')[0],
     type: 'Petrol',
@@ -89,6 +95,8 @@ function App() {
     if (saved) {
       setMasterData(saved.masterData || { employees: {}, vendors: {}, users: {} });
       setExpenses(saved.expenses || []);
+      setAuditLogs(saved.auditLogs || []);
+      setFileLogs(saved.fileLogs || []);
     } else {
       // Initialize with defaults
       const initialData = {
@@ -109,16 +117,28 @@ function App() {
       });
       
       setMasterData(initialData);
-      saveToStorage({ masterData: initialData, expenses: [] });
+      saveToStorage({ masterData: initialData, expenses: [], auditLogs: [], fileLogs: [] });
     }
   }, []);
 
   // Auto-save when data changes
   useEffect(() => {
     if (currentUser) {
-      saveToStorage({ masterData, expenses });
+      saveToStorage({ masterData, expenses, auditLogs, fileLogs });
     }
-  }, [masterData, expenses, currentUser]);
+  }, [masterData, expenses, auditLogs, fileLogs, currentUser]);
+
+  // Helper to add audit log
+  const addAuditLog = (action, resource, resourceId, before = null, after = null, metadata = {}) => {
+    const log = createAuditLog(currentUser, action, resource, resourceId, before, after, metadata);
+    setAuditLogs(prev => [log, ...prev]); // Newest first
+  };
+
+  // Helper to add file log
+  const addFileLog = (operation, file, metadata = {}) => {
+    const log = createFileLog(currentUser, operation, file, metadata);
+    setFileLogs(prev => [log, ...prev]); // Newest first
+  };
 
   // Login handler
   const handleLogin = () => {
@@ -130,13 +150,23 @@ function App() {
       setShowLogin(false);
       setLoginForm({ username: '', password: '', showPassword: false });
       setErrors([]);
+      
+      // Log successful login
+      logAudit(auditLogs, setAuditLogs, 'login', 'auth', username, null, { username, success: true }, user);
     } else {
       setErrors(['Invalid username or password']);
+      
+      // Log failed login attempt
+      const tempUser = { username: username || 'unknown', name: username || 'unknown', role: 'unknown' };
+      logAudit(auditLogs, setAuditLogs, 'login_failed', 'auth', username, null, null, tempUser, false, 'Invalid credentials');
     }
   };
 
   // Logout handler
   const handleLogout = () => {
+    // Log logout
+    logAudit(auditLogs, setAuditLogs, 'logout', 'auth', currentUser.username, null, null, currentUser);
+    
     setCurrentUser(null);
     setShowLogin(true);
     setCurrentView('home');
@@ -246,6 +276,9 @@ function App() {
     
     setExpenses([...expenses, expense]);
     
+    // Log audit
+    logAudit(auditLogs, setAuditLogs, 'expense_created', 'expense', expense.id, null, expense, currentUser);
+    
     // Reset form
     setExpenseForm({
       date: new Date().toISOString().split('T')[0],
@@ -266,6 +299,40 @@ function App() {
     });
     
     setErrors([]);
+  };
+
+  // Approve expense
+  const approveExpense = (expenseId) => {
+    const expense = expenses.find(e => e.id === expenseId);
+    const updatedExpense = {
+      ...expense,
+      status: 'approved',
+      approvedBy: currentUser.username,
+      approvedByName: currentUser.name,
+      approvedDate: new Date().toISOString()
+    };
+    
+    setExpenses(expenses.map(e => e.id === expenseId ? updatedExpense : e));
+    
+    // Log audit
+    logAudit(auditLogs, setAuditLogs, 'expense_approved', 'expense', expenseId, expense, updatedExpense, currentUser);
+  };
+
+  // Reject expense
+  const rejectExpense = (expenseId) => {
+    const expense = expenses.find(e => e.id === expenseId);
+    const updatedExpense = {
+      ...expense,
+      status: 'rejected',
+      rejectedBy: currentUser.username,
+      rejectedByName: currentUser.name,
+      rejectedDate: new Date().toISOString()
+    };
+    
+    setExpenses(expenses.map(e => e.id === expenseId ? updatedExpense : e));
+    
+    // Log audit
+    logAudit(auditLogs, setAuditLogs, 'expense_rejected', 'expense', expenseId, expense, updatedExpense, currentUser);
   };
 
   // Handle bulk Excel upload
@@ -348,8 +415,39 @@ function App() {
       setBulkUploadResults(results);
       setErrors([]);
       
+      // Log file upload
+      logFileOperation(fileLogs, setFileLogs, 'upload', file, {
+        type: 'expense_upload',
+        status: results.errors.length === 0 ? 'processed' : (results.valid.length > 0 ? 'partial' : 'error'),
+        rowCount: results.total,
+        validRows: results.valid.length,
+        errorRows: results.errors.length,
+        errors: results.errors.map(e => `Row ${e.row}: ${e.errors.join(', ')}`),
+        fileName: file.name
+      }, currentUser);
+      
+      // Log audit
+      logAudit(auditLogs, setAuditLogs, 'file_uploaded', 'file', file.name, null, { 
+        rowCount: results.total, 
+        validRows: results.valid.length,
+        errorRows: results.errors.length 
+      }, currentUser, true, null);
+      
     } catch (error) {
       setErrors([`Error reading file: ${error.message}`]);
+      
+      // Log failed upload
+      logFileOperation(fileLogs, setFileLogs, 'upload', file, {
+        type: 'expense_upload',
+        status: 'error',
+        rowCount: 0,
+        validRows: 0,
+        errorRows: 0,
+        errors: [error.message],
+        fileName: file?.name || 'unknown'
+      }, currentUser);
+      
+      logAudit(auditLogs, setAuditLogs, 'file_upload_failed', 'file', file?.name || 'unknown', null, null, currentUser, false, error.message);
     }
   };
 
@@ -477,8 +575,37 @@ function App() {
       setErrors([]);
       alert(`✅ Imported ${importCount} vendors successfully!`);
       
+      // Log file operation
+      logFileOperation(fileLogs, setFileLogs, 'upload', file, {
+        type: 'vendor_import',
+        status: 'processed',
+        rowCount: data.length,
+        validRows: importCount,
+        errorRows: 0,
+        errors: [],
+        fileName: file.name
+      }, currentUser);
+      
+      // Log audit
+      logAudit(auditLogs, setAuditLogs, 'vendors_imported', 'vendor', null, null, { count: importCount }, currentUser);
+      
     } catch (error) {
       setErrors([`Error importing vendors: ${error.message}`]);
+      
+      // Log failed import
+      if (file) {
+        logFileOperation(fileLogs, setFileLogs, 'upload', file, {
+          type: 'vendor_import',
+          status: 'error',
+          rowCount: 0,
+          validRows: 0,
+          errorRows: 0,
+          errors: [error.message],
+          fileName: file.name
+        }, currentUser);
+      }
+      
+      logAudit(auditLogs, setAuditLogs, 'vendor_import_failed', 'vendor', null, null, null, currentUser, false, error.message);
     }
   };
 
@@ -543,8 +670,37 @@ function App() {
       setErrors([]);
       alert(`✅ Imported ${importCount} employees successfully!`);
       
+      // Log file operation
+      logFileOperation(fileLogs, setFileLogs, 'upload', file, {
+        type: 'employee_import',
+        status: 'processed',
+        rowCount: data.length,
+        validRows: importCount,
+        errorRows: 0,
+        errors: [],
+        fileName: file.name
+      }, currentUser);
+      
+      // Log audit
+      logAudit(auditLogs, setAuditLogs, 'employees_imported', 'employee', null, null, { count: importCount }, currentUser);
+      
     } catch (error) {
       setErrors([`Error importing employees: ${error.message}`]);
+      
+      // Log failed import
+      if (file) {
+        logFileOperation(fileLogs, setFileLogs, 'upload', file, {
+          type: 'employee_import',
+          status: 'error',
+          rowCount: 0,
+          validRows: 0,
+          errorRows: 0,
+          errors: [error.message],
+          fileName: file.name
+        }, currentUser);
+      }
+      
+      logAudit(auditLogs, setAuditLogs, 'employee_import_failed', 'employee', null, null, null, currentUser, false, error.message);
     }
   };
 
@@ -577,6 +733,10 @@ function App() {
     setVendorForm({ name: '', bank: '', ifsc: '', accountNo: '', branch: '', status: 'Active' });
     setShowVendorForm(false);
     setErrors([]);
+    
+    // Log audit
+    logAudit(auditLogs, setAuditLogs, 'vendor_created', 'vendor', vendorId, null, newVendors[vendorId], currentUser);
+    
     alert(`✅ Vendor "${name}" added successfully!`);
   };
 
@@ -620,6 +780,10 @@ function App() {
     setEmployeeForm({ empId: '', name: '', department: '', designation: '', bankName: '', ifsc: '', accountNo: '', branch: '', accountType: 'Saving' });
     setShowEmployeeForm(false);
     setErrors([]);
+    
+    // Log audit
+    logAudit(auditLogs, setAuditLogs, 'employee_created', 'employee', empId, null, newEmployees[empId], currentUser);
+    
     alert(`✅ Employee "${name}" added successfully!`);
   };
 
@@ -904,6 +1068,26 @@ Return ONLY this JSON:
               <FileText size={18} />
               Payroll
             </button>
+            <button
+              onClick={() => setCurrentView('files')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                currentView === 'files' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              <FileSpreadsheet size={18} />
+              Files ({fileLogs.length})
+            </button>
+            {hasPermission(currentUser, 'audit', 'view') && (
+              <button
+                onClick={() => setCurrentView('audit')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                  currentView === 'audit' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+              >
+                <List size={18} />
+                Audit Log
+              </button>
+            )}
           </div>
         </div>
 
@@ -1234,17 +1418,13 @@ Return ONLY this JSON:
                         {currentUser.role === 'admin' && (
                           <div className="flex gap-2">
                             <button
-                              onClick={() => setExpenses(expenses.map(e => 
-                                e.id === exp.id ? {...e, status: 'approved', approvedBy: currentUser.username, approvedDate: new Date().toISOString()} : e
-                              ))}
+                              onClick={() => approveExpense(exp.id)}
                               className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
                             >
                               ✓
                             </button>
                             <button
-                              onClick={() => setExpenses(expenses.map(e => 
-                                e.id === exp.id ? {...e, status: 'rejected', rejectedBy: currentUser.username} : e
-                              ))}
+                              onClick={() => rejectExpense(exp.id)}
                               className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
                             >
                               ✗
@@ -1726,6 +1906,226 @@ Return ONLY this JSON:
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Files View */}
+        {currentView === 'files' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold">File Management</h2>
+                  <p className="text-gray-600">Track all file uploads and downloads</p>
+                </div>
+                <div className="text-sm text-gray-600">
+                  <p><strong>{fileLogs.length}</strong> files tracked</p>
+                </div>
+              </div>
+              
+              {fileLogs.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <FileText size={48} className="mx-auto mb-4 text-gray-400" />
+                  <p>No files uploaded yet</p>
+                  <p className="text-sm">Upload expense CSV, vendor import, or employee import to see them here</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {fileLogs.slice(0, 50).map(log => (
+                    <div key={log.fileId} className={`border-2 rounded-lg p-4 ${
+                      log.status === 'processed' || log.status === 'success' ? 'border-green-200 bg-green-50' :
+                      log.status === 'error' ? 'border-red-200 bg-red-50' :
+                      'border-orange-200 bg-orange-50'
+                    }`}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <FileText size={20} className={
+                              log.status === 'processed' || log.status === 'success' ? 'text-green-600' :
+                              log.status === 'error' ? 'text-red-600' : 'text-orange-600'
+                            } />
+                            <span className="font-semibold text-gray-900">{log.fileName}</span>
+                            <span className="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700">
+                              {log.action.toUpperCase()}
+                            </span>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              log.status === 'processed' || log.status === 'success' ? 'bg-green-200 text-green-800' :
+                              log.status === 'error' ? 'bg-red-200 text-red-800' :
+                              'bg-orange-200 text-orange-800'
+                            }`}>
+                              {log.status.toUpperCase()}
+                            </span>
+                          </div>
+                          
+                          <div className="grid md:grid-cols-4 gap-4 text-sm text-gray-700">
+                            <div>
+                              <p className="text-xs text-gray-500">Uploaded By</p>
+                              <p className="font-medium">{log.uploadedByName}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Date</p>
+                              <p className="font-medium">{formatRelativeTime(log.uploadedDate)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Rows</p>
+                              <p className="font-medium">{log.rowCount} total | {log.validRows} valid | {log.errorRows} errors</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Size</p>
+                              <p className="font-medium">{formatFileSize(log.fileSize)}</p>
+                            </div>
+                          </div>
+                          
+                          {log.errors && log.errors.length > 0 && (
+                            <div className="mt-3 p-3 bg-red-100 border border-red-200 rounded text-sm">
+                              <p className="font-semibold text-red-800 mb-1">Errors:</p>
+                              <ul className="list-disc list-inside text-red-700 space-y-1">
+                                {log.errors.slice(0, 3).map((err, idx) => (
+                                  <li key={idx}>{err}</li>
+                                ))}
+                                {log.errors.length > 3 && (
+                                  <li className="text-red-600">...and {log.errors.length - 3} more</li>
+                                )}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {fileLogs.length > 50 && (
+                    <p className="text-center text-sm text-gray-500 pt-4">
+                      Showing 50 most recent files (total: {fileLogs.length})
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Audit Log View - Admin Only */}
+        {currentView === 'audit' && (
+          <div className="space-y-6">
+            {currentUser.role !== 'admin' ? (
+              <div className="bg-white rounded-lg shadow-lg p-12 text-center">
+                <AlertCircle size={64} className="mx-auto mb-4 text-red-500" />
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h3>
+                <p className="text-gray-600">Only administrators can view audit logs.</p>
+                <button
+                  onClick={() => setCurrentView('home')}
+                  className="mt-6 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Go to Home
+                </button>
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold">Audit Log</h2>
+                    <p className="text-gray-600">Complete history of all actions in the system</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="text-sm text-gray-600 text-right">
+                      <p><strong>{auditLogs.length}</strong> events tracked</p>
+                      <p className="text-xs">{auditLogs.filter(l => !l.success).length} failures</p>
+                    </div>
+                    <button
+                      onClick={() => exportAuditLogs(auditLogs)}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      <Download size={18} />
+                      Export CSV
+                    </button>
+                  </div>
+                </div>
+                
+                {auditLogs.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <Database size={48} className="mx-auto mb-4 text-gray-400" />
+                    <p>No audit events yet</p>
+                    <p className="text-sm">Actions will be logged automatically</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {auditLogs.slice(0, 100).map(log => (
+                      <div key={log.logId} className={`border-l-4 rounded-r-lg p-4 ${
+                        !log.success ? 'border-red-500 bg-red-50' :
+                        log.category === 'auth' ? 'border-purple-500 bg-purple-50' :
+                        log.category === 'approval' ? 'border-green-500 bg-green-50' :
+                        log.category === 'file' ? 'border-blue-500 bg-blue-50' :
+                        'border-gray-500 bg-gray-50'
+                      }`}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="text-2xl">{getCategoryIcon(log.category)}</span>
+                              <div>
+                                <p className="font-semibold text-gray-900">
+                                  {log.action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  by <strong>{log.userName}</strong> ({log.userRole})
+                                </p>
+                              </div>
+                              {!log.success && (
+                                <span className="text-xs px-2 py-1 rounded bg-red-200 text-red-800">
+                                  FAILED
+                                </span>
+                              )}
+                            </div>
+                            
+                            <div className="grid md:grid-cols-3 gap-4 text-sm text-gray-700 mb-2">
+                              <div>
+                                <p className="text-xs text-gray-500">Time</p>
+                                <p className="font-medium">{formatRelativeTime(log.timestamp)}</p>
+                                <p className="text-xs text-gray-500">{new Date(log.timestamp).toLocaleString()}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Resource</p>
+                                <p className="font-medium">{log.resource} {log.resourceId && `(${log.resourceId})`}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Category</p>
+                                <p className="font-medium capitalize">{log.category}</p>
+                              </div>
+                            </div>
+                            
+                            {log.changes && log.changes.length > 0 && (
+                              <div className="mt-2 p-2 bg-white border border-gray-200 rounded text-xs">
+                                <p className="font-semibold text-gray-700 mb-1">Changes:</p>
+                                <ul className="space-y-1 text-gray-600">
+                                  {log.changes.slice(0, 3).map((change, idx) => (
+                                    <li key={idx}>• {change}</li>
+                                  ))}
+                                  {log.changes.length > 3 && (
+                                    <li className="text-gray-500">...and {log.changes.length - 3} more changes</li>
+                                  )}
+                                </ul>
+                              </div>
+                            )}
+                            
+                            {log.errorMessage && (
+                              <div className="mt-2 p-2 bg-red-100 border border-red-200 rounded text-sm">
+                                <p className="font-semibold text-red-800">Error: {log.errorMessage}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {auditLogs.length > 100 && (
+                      <p className="text-center text-sm text-gray-500 pt-4">
+                        Showing 100 most recent events (total: {auditLogs.length})
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
