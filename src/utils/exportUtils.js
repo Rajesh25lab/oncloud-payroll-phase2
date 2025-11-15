@@ -16,39 +16,107 @@ export const generateJournalNumber = (prefix, index) => {
   return `${prefix}-${dateStr}-${index.toString().padStart(3, '0')}`;
 };
 
-// Download Excel template for bulk upload
-export const downloadExcelTemplate = () => {
-  const headers = ['Date', 'Type*', 'Payee Name*', 'Payee Type', 'Amount*', 'Receipt#', 'Reason', 'Narration', 'For Employee ID'];
+// Download Excel template for bulk upload with dropdown reference
+export const downloadExcelTemplate = (masterData) => {
+  // Create main expense entry sheet
+  const headers = ['Date', 'Type*', 'Payee/Vendor*', 'Amount*', 'Receipt#', 'Reason', 'Narration'];
   
   const instructions = [
-    'DD/MM/YYYY or leave blank for today',
-    'Required: Petrol, Rent, Interest, etc.',
-    'Required: Vendor or Employee name',
-    'Vendor / Employee / Other',
-    'Required: Number only',
-    'Optional: Bill/Invoice number',
-    'Optional: Purpose/Reason',
-    'Optional: Detailed description',
-    'Optional: Employee ID if paying for someone else'
+    'DD/MM/YYYY',
+    'Choose from list below',
+    'Choose from list below',
+    'Number only',
+    'Optional',
+    'Optional',
+    'Optional'
   ];
   
   const samples = [
-    ['15/11/2025', 'Petrol', 'BHAIRAAV WATER SYSTEMS', 'Vendor', '500', 'INV-001', 'Vehicle fuel', 'Daily petrol for delivery van', ''],
-    ['14/11/2025', 'Rent', 'ALPINE', 'Vendor', '120000', 'RENT-NOV-2025', 'Monthly factory rent', 'November 2025 rent payment', ''],
-    ['13/11/2025', 'Advance', 'Anibash das', 'Employee', '5000', 'ADV-001', 'Personal emergency', 'Emergency advance requested by employee', 'E0116'],
-    ['', 'Petrol', 'BHAIRAAV', 'Vendor', '350', '', 'Fuel', 'Petrol expense', '']
+    ['15/11/2025', 'Petrol', 'BHAIRAAV WATER SYSTEMS', '500', 'INV-001', 'Vehicle fuel', 'Daily petrol'],
+    ['14/11/2025', 'Rent', 'ALPINE', '120000', 'RENT-NOV', 'Monthly rent', 'Factory rent payment'],
+    ['', 'Advance', 'Anibash das', '5000', '', 'Emergency', 'Staff advance']
+  ];
+  
+  // Build sections
+  const sections = [];
+  
+  // Main entry area
+  sections.push('=== FILL YOUR EXPENSES BELOW (Delete sample rows) ===');
+  sections.push(headers.join(','));
+  sections.push(instructions.join(','));
+  sections.push('');
+  sections.push(...samples.map(row => row.map(cell => `"${cell}"`).join(',')));
+  sections.push('');
+  sections.push('');
+  
+  // Expense Types Reference (for dropdown)
+  sections.push('=== EXPENSE TYPES - Copy exact name to Type column ===');
+  Object.keys(CONFIG.expenseTypes).forEach(type => {
+    sections.push(`"${type}"`);
+  });
+  sections.push('');
+  sections.push('');
+  
+  // Vendors Reference (for dropdown)
+  sections.push('=== VENDORS - Copy exact name to Payee column ===');
+  sections.push('Vendor Name,Bank,IFSC,Account');
+  Object.values(masterData.vendors || {}).forEach(v => {
+    sections.push(`"${v.name}","${v.bank}","${v.ifsc}","${v.accountNo}"`);
+  });
+  sections.push('');
+  sections.push('');
+  
+  // Employees Reference (for dropdown)
+  sections.push('=== EMPLOYEES - Copy exact name to Payee column ===');
+  sections.push('Emp ID,Name,Department,Bank,IFSC,Account');
+  Object.values(masterData.employees || {}).forEach(e => {
+    sections.push(`"${e.empId}","${e.name}","${e.department || ''}","${e.bankName}","${e.ifsc}","${e.accountNo}"`);
+  });
+  
+  const csv = sections.join('\n');
+  downloadCSV(csv, `Expense_Template_${new Date().toISOString().split('T')[0]}.csv`);
+};
+
+// Download template for bulk importing vendors
+export const downloadVendorImportTemplate = () => {
+  const headers = ['Vendor Name*', 'Bank Name*', 'IFSC Code*', 'Account Number*', 'Branch', 'Status'];
+  const instructions = ['Required', 'Required', 'Required (11 chars)', 'Required', 'Optional', 'Active/Inactive'];
+  const samples = [
+    ['ABC Suppliers', 'HDFC Bank', 'HDFC0001234', '12345678901', 'Mumbai Branch', 'Active'],
+    ['XYZ Services', 'ICICI Bank', 'ICIC0005678', '98765432101', 'Delhi Branch', 'Active']
   ];
   
   const rows = [
     headers.join(','),
     instructions.join(','),
     '',
-    '=== SAMPLE DATA - Delete these rows before uploading ===',
+    '=== SAMPLE DATA - Delete before uploading ===',
     ...samples.map(row => row.map(cell => `"${cell}"`).join(','))
   ];
   
   const csv = rows.join('\n');
-  downloadCSV(csv, `Expense_Upload_Template_${new Date().toISOString().split('T')[0]}.csv`);
+  downloadCSV(csv, `Vendor_Import_Template_${new Date().toISOString().split('T')[0]}.csv`);
+};
+
+// Download template for bulk importing employees  
+export const downloadEmployeeImportTemplate = () => {
+  const headers = ['Emp ID*', 'Name*', 'Department', 'Designation', 'Bank Name*', 'IFSC Code*', 'Account Number*', 'Branch', 'Account Type'];
+  const instructions = ['E0001', 'Required', 'Optional', 'Optional', 'Required', 'Required', 'Required', 'Optional', 'Saving/Current'];
+  const samples = [
+    ['E0201', 'John Doe', 'Sales', 'Manager', 'HDFC Bank', 'HDFC0001234', '12345678901', 'Mumbai', 'Saving'],
+    ['E0202', 'Jane Smith', 'Accounts', 'Accountant', 'ICICI Bank', 'ICIC0005678', '98765432101', 'Delhi', 'Saving']
+  ];
+  
+  const rows = [
+    headers.join(','),
+    instructions.join(','),
+    '',
+    '=== SAMPLE DATA - Delete before uploading ===',
+    ...samples.map(row => row.map(cell => `"${cell}"`).join(','))
+  ];
+  
+  const csv = rows.join('\n');
+  downloadCSV(csv, `Employee_Import_Template_${new Date().toISOString().split('T')[0]}.csv`);
 };
 
 // Download master data reference lists

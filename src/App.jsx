@@ -438,48 +438,65 @@ Return ONLY this JSON:
       }
       content.push({ type: "text", text: prompt });
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{ role: "user", content: content }]
-        })
-      });
+      // Note: AI receipt reading requires Claude API access
+      // Since API calls from browser may fail due to CORS, we'll use a fallback
+      try {
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01"
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 1000,
+            messages: [{ role: "user", content: content }]
+          })
+        });
 
-      if (!response.ok) throw new Error(`AI failed: ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}. AI features require backend proxy.`);
+        }
 
-      const data = await response.json();
-      let responseText = data.content[0].text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      const extractedData = JSON.parse(responseText);
-      
-      const vendorMatch = findBestMatch(extractedData.vendor, Object.values(masterData.vendors));
-      
-      setExpenseForm({
-        date: parseDateToISO(extractedData.date) || new Date().toISOString().split('T')[0],
-        type: extractedData.suggestedType || 'Other',
-        payeeType: vendorMatch ? 'vendor' : 'other',
-        payeeId: vendorMatch ? vendorMatch.match.id : '',
-        payeeName: vendorMatch ? vendorMatch.match.name : extractedData.vendor,
-        forSelf: true,
-        forEmployeeId: '',
-        amount: extractedData.amount.toString(),
-        receiptNo: extractedData.billNumber || '',
-        narration: extractedData.items || '',
-        reason: `AI extracted (${extractedData.confidence})`,
-        bankName: vendorMatch ? vendorMatch.match.bank : '',
-        ifsc: vendorMatch ? vendorMatch.match.ifsc : '',
-        accountNo: vendorMatch ? vendorMatch.match.accountNo : '',
-        branch: vendorMatch ? vendorMatch.match.branch : ''
-      });
-      
-      setShowReceiptUpload(false);
-      setReceiptProcessing(false);
-      alert(`✅ Receipt processed! ${vendorMatch ? `Matched: ${vendorMatch.match.name}` : 'Verify details'}`);
+        const data = await response.json();
+        let responseText = data.content[0].text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        const extractedData = JSON.parse(responseText);
+        
+        const vendorMatch = findBestMatch(extractedData.vendor, Object.values(masterData.vendors));
+        
+        setExpenseForm({
+          date: parseDateToISO(extractedData.date) || new Date().toISOString().split('T')[0],
+          type: extractedData.suggestedType || 'Other',
+          payeeType: vendorMatch ? 'vendor' : 'other',
+          payeeId: vendorMatch ? vendorMatch.match.id : '',
+          payeeName: vendorMatch ? vendorMatch.match.name : extractedData.vendor,
+          forSelf: true,
+          forEmployeeId: '',
+          amount: extractedData.amount.toString(),
+          receiptNo: extractedData.billNumber || '',
+          narration: extractedData.items || '',
+          reason: `AI extracted (${extractedData.confidence})`,
+          bankName: vendorMatch ? vendorMatch.match.bank : '',
+          ifsc: vendorMatch ? vendorMatch.match.ifsc : '',
+          accountNo: vendorMatch ? vendorMatch.match.accountNo : '',
+          branch: vendorMatch ? vendorMatch.match.branch : ''
+        });
+        
+        setShowReceiptUpload(false);
+        setReceiptProcessing(false);
+        alert(`✅ Receipt processed! ${vendorMatch ? `Matched: ${vendorMatch.match.name}` : 'Verify details'}`);
+      } catch (apiError) {
+        // Fallback: AI not available from browser
+        setErrors([
+          'AI Receipt Reading requires a backend proxy due to browser CORS restrictions.',
+          'Please use manual entry or bulk upload instead.',
+          'Contact support to enable AI features: rajesh@oncloudindia.com'
+        ]);
+        setReceiptProcessing(false);
+      }
       
     } catch (error) {
-      setErrors([`AI failed: ${error.message}`]);
+      setErrors([`Error: ${error.message}`]);
       setReceiptProcessing(false);
     }
   };
@@ -628,7 +645,7 @@ Return ONLY this JSON:
         <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={() => setCurrentView('home')}
+              onClick={() => { setCurrentView('home'); setShowBulkUpload(false); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
                 currentView === 'home' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
               }`}
@@ -637,16 +654,16 @@ Return ONLY this JSON:
               Home
             </button>
             <button
-              onClick={() => setCurrentView('expenses')}
+              onClick={() => { setCurrentView('expenses'); setShowBulkUpload(false); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                currentView === 'expenses' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
+                currentView === 'expenses' && !showBulkUpload ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
               }`}
             >
               <Receipt size={18} />
               Expenses ({stats.pendingExpenses})
             </button>
             <button
-              onClick={() => { setCurrentView('expenses'); setShowBulkUpload(true); }}
+              onClick={() => { setCurrentView('bulkupload'); setShowBulkUpload(true); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
                 showBulkUpload ? 'bg-purple-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
               }`}
@@ -655,7 +672,7 @@ Return ONLY this JSON:
               Bulk Upload
             </button>
             <button
-              onClick={() => setCurrentView('masterdata')}
+              onClick={() => { setCurrentView('masterdata'); setShowBulkUpload(false); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
                 currentView === 'masterdata' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
               }`}
@@ -664,7 +681,7 @@ Return ONLY this JSON:
               Master Data
             </button>
             <button
-              onClick={() => setCurrentView('payroll')}
+              onClick={() => { setCurrentView('payroll'); setShowBulkUpload(false); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
                 currentView === 'payroll' ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
               }`}
@@ -750,10 +767,10 @@ Return ONLY this JSON:
                   <h3 className="font-semibold mb-3">Quick Actions:</h3>
                   <div className="space-y-2">
                     <button
-                      onClick={() => downloadExcelTemplate()}
+                      onClick={() => downloadExcelTemplate(masterData)}
                       className="w-full bg-white text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition font-semibold text-sm"
                     >
-                      📥 Download Upload Template
+                      📥 Download Expense Template
                     </button>
                     <button
                       onClick={() => downloadMasterDataLists(masterData)}
@@ -775,7 +792,7 @@ Return ONLY this JSON:
         )}
 
         {/* Expenses View */}
-        {currentView === 'expenses' && !showBulkUpload && (
+        {currentView === 'expenses' && (
           <div className="space-y-6">
             <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex items-center justify-between mb-6">
@@ -1046,7 +1063,7 @@ Return ONLY this JSON:
         )}
 
         {/* Bulk Upload View */}
-        {showBulkUpload && (
+        {currentView === 'bulkupload' && (
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold">Bulk Excel Upload</h2>
@@ -1061,18 +1078,18 @@ Return ONLY this JSON:
             <div className="space-y-4 mb-6">
               <div className="flex gap-4">
                 <button
-                  onClick={downloadExcelTemplate}
+                  onClick={() => downloadExcelTemplate(masterData)}
                   className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                 >
                   <Download size={20} />
-                  Download Template
+                  Download Expense Template
                 </button>
                 <button
                   onClick={() => downloadMasterDataLists(masterData)}
                   className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
                 >
                   <List size={20} />
-                  Download Master Data Lists
+                  Download Reference Lists
                 </button>
               </div>
               
