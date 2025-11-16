@@ -92,6 +92,10 @@ function App() {
   const [errors, setErrors] = useState([]);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorContext, setErrorContext] = useState('general');
+  const [pendingDuplicates, setPendingDuplicates] = useState({
+    vendors: [],
+    employees: []
+  });
   
   // Duplicate approval state
   const [duplicateExpense, setDuplicateExpense] = useState(null);
@@ -105,6 +109,7 @@ function App() {
       setExpenses(saved.expenses || []);
       setAuditLogs(saved.auditLogs || []);
       setFileLogs(saved.fileLogs || []);
+      setPendingDuplicates(saved.pendingDuplicates || { vendors: [], employees: [] });
     } else {
       // Initialize with defaults
       const initialData = {
@@ -125,16 +130,16 @@ function App() {
       });
       
       setMasterData(initialData);
-      saveToStorage({ masterData: initialData, expenses: [], auditLogs: [], fileLogs: [] });
+      saveToStorage({ masterData: initialData, expenses: [], auditLogs: [], fileLogs: [], pendingDuplicates: { vendors: [], employees: [] } });
     }
   }, []);
 
   // Auto-save when data changes
   useEffect(() => {
     if (currentUser) {
-      saveToStorage({ masterData, expenses, auditLogs, fileLogs });
+      saveToStorage({ masterData, expenses, auditLogs, fileLogs, pendingDuplicates });
     }
-  }, [masterData, expenses, auditLogs, fileLogs, currentUser]);
+  }, [masterData, expenses, auditLogs, fileLogs, pendingDuplicates, currentUser]);
 
   // Helper to add audit log
   const addAuditLog = (action, resource, resourceId, before = null, after = null, metadata = {}) => {
@@ -153,6 +158,113 @@ function App() {
     setErrors(errorList);
     setErrorContext(context);
     setShowErrorModal(true);
+  };
+
+  // Approve pending duplicate (import it, replacing/adding)
+  const approvePendingDuplicate = (pendingId, type) => {
+    if (!requirePermission(currentUser, 'approve', type)) {
+      logAudit(auditLogs, setAuditLogs, 'permission_denied', type, pendingId, null, { action: 'approve_duplicate' }, currentUser, false, 'Insufficient permissions');
+      return;
+    }
+
+    const pending = type === 'vendor' 
+      ? pendingDuplicates.vendors.find(p => p.id === pendingId)
+      : pendingDuplicates.employees.find(p => p.id === pendingId);
+
+    if (!pending) return;
+
+    if (type === 'vendor') {
+      // Add/update vendor
+      const vendorId = generateId('VEN');
+      const newVendors = { ...masterData.vendors };
+      newVendors[vendorId] = {
+        id: vendorId,
+        ...pending.data,
+        addedDate: new Date().toISOString(),
+        source: 'duplicate_approved',
+        approvedBy: currentUser.username,
+        approvedDate: new Date().toISOString()
+      };
+      setMasterData({ ...masterData, vendors: newVendors });
+
+      // Remove from pending
+      setPendingDuplicates({
+        ...pendingDuplicates,
+        vendors: pendingDuplicates.vendors.filter(p => p.id !== pendingId)
+      });
+
+      // Log audit
+      logAudit(auditLogs, setAuditLogs, 'duplicate_vendor_approved', 'vendor', vendorId, null, {
+        pendingId,
+        vendorName: pending.data.name,
+        approvedBy: currentUser.name
+      }, currentUser);
+
+      alert(`✅ Duplicate vendor "${pending.data.name}" approved and imported!`);
+    } else if (type === 'employee') {
+      // Add/update employee
+      const newEmployees = { ...masterData.employees };
+      newEmployees[pending.data.empId] = {
+        ...pending.data,
+        addedDate: new Date().toISOString(),
+        source: 'duplicate_approved',
+        approvedBy: currentUser.username,
+        approvedDate: new Date().toISOString()
+      };
+      setMasterData({ ...masterData, employees: newEmployees });
+
+      // Remove from pending
+      setPendingDuplicates({
+        ...pendingDuplicates,
+        employees: pendingDuplicates.employees.filter(p => p.id !== pendingId)
+      });
+
+      // Log audit
+      logAudit(auditLogs, setAuditLogs, 'duplicate_employee_approved', 'employee', pending.data.empId, null, {
+        pendingId,
+        employeeName: pending.data.name,
+        approvedBy: currentUser.name
+      }, currentUser);
+
+      alert(`✅ Duplicate employee "${pending.data.name}" approved and imported!`);
+    }
+  };
+
+  // Reject pending duplicate (discard it)
+  const rejectPendingDuplicate = (pendingId, type) => {
+    if (!requirePermission(currentUser, 'approve', type)) {
+      logAudit(auditLogs, setAuditLogs, 'permission_denied', type, pendingId, null, { action: 'reject_duplicate' }, currentUser, false, 'Insufficient permissions');
+      return;
+    }
+
+    const pending = type === 'vendor'
+      ? pendingDuplicates.vendors.find(p => p.id === pendingId)
+      : pendingDuplicates.employees.find(p => p.id === pendingId);
+
+    if (!pending) return;
+
+    const name = type === 'vendor' ? pending.data.name : pending.data.name;
+
+    if (type === 'vendor') {
+      setPendingDuplicates({
+        ...pendingDuplicates,
+        vendors: pendingDuplicates.vendors.filter(p => p.id !== pendingId)
+      });
+    } else {
+      setPendingDuplicates({
+        ...pendingDuplicates,
+        employees: pendingDuplicates.employees.filter(p => p.id !== pendingId)
+      });
+    }
+
+    // Log audit
+    logAudit(auditLogs, setAuditLogs, `duplicate_${type}_rejected`, type, pendingId, null, {
+      pendingId,
+      name: name,
+      rejectedBy: currentUser.name
+    }, currentUser);
+
+    alert(`❌ Duplicate ${type} "${name}" rejected and discarded.`);
   };
 
   // Login handler
@@ -736,20 +848,71 @@ function App() {
         importCount++;
       });
       
-      if (errors.length > 0) {
-        // Show detailed errors with structure
-        const detailedErrors = errors.map(e => ({
+      // Separate duplicates from critical errors
+      const duplicates = errors.filter(e => e.isDuplicate);
+      const criticalErrors = errors.filter(e => !e.isDuplicate);
+      
+      if (criticalErrors.length > 0) {
+        const detailedErrors = criticalErrors.map(e => ({
           message: `Row ${e.row} (${e.vendor}): ${e.message}`,
           details: e.details,
-          type: e.isDuplicate ? 'duplicate' : 'validation'
+          type: 'validation'
         }));
-        showErrors(detailedErrors, 'Vendor Import Validation');
+        showErrors(detailedErrors, 'Vendor Import - Fix These Errors');
         return;
       }
       
+      // Import clean records
       setMasterData({ ...masterData, vendors: newVendors });
+      
+      // Handle duplicates - add to pending approval queue
+      if (duplicates.length > 0) {
+        const pendingVendors = duplicates.map(dup => ({
+          id: generateId('PEND'),
+          type: 'vendor',
+          row: dup.row,
+          data: {
+            name: dup.vendor,
+            bank: data[dup.row - 2]['Bank Name'],
+            ifsc: data[dup.row - 2]['IFSC Code'],
+            accountNo: data[dup.row - 2]['Account Number'],
+            branch: data[dup.row - 2]['Branch'] || '',
+            status: data[dup.row - 2]['Status'] || 'Active'
+          },
+          existing: Object.values(masterData.vendors).find(v => 
+            v.name.toLowerCase() === dup.vendor.toLowerCase()
+          ),
+          reason: dup.message,
+          submittedBy: currentUser.username,
+          submittedByName: currentUser.name,
+          submittedDate: new Date().toISOString(),
+          status: 'pending_review'
+        }));
+        
+        setPendingDuplicates({
+          ...pendingDuplicates,
+          vendors: [...pendingDuplicates.vendors, ...pendingVendors]
+        });
+        
+        // Log to audit
+        logAudit(auditLogs, setAuditLogs, 'duplicate_vendors_flagged', 'vendor', null, null, {
+          count: duplicates.length,
+          imported: importCount,
+          flagged: duplicates.length
+        }, currentUser);
+      }
+      
+      // Show success message with summary
+      const message = importCount > 0 
+        ? `✅ Imported ${importCount} vendor(s) successfully!` 
+        : '✅ Import completed!';
+      
+      const duplicateMessage = duplicates.length > 0
+        ? `\n\n⚠️ ${duplicates.length} duplicate(s) flagged for admin review.\nGo to Master Data → Pending Approvals to review.`
+        : '';
+      
+      alert(message + duplicateMessage);
       setErrors([]);
-      alert(`✅ Imported ${importCount} vendors successfully!`);
       
       // Log file operation
       logFileOperation(fileLogs, setFileLogs, 'upload', file, {
@@ -960,54 +1123,62 @@ function App() {
       
       // If only duplicates, handle based on user role
       if (duplicates.length > 0) {
-        if (currentUser.role !== 'admin') {
-          const detailedErrors = duplicates.map(e => ({
-            message: `Row ${e.row} (${e.employee}): ${e.message}`,
-            details: `${e.details}\n⚠️ ADMIN APPROVAL REQUIRED to override duplicates.`,
-            type: 'duplicate'
-          }));
-          showErrors(detailedErrors, 'Duplicate Employees - Admin Approval Needed');
-          return;
-        }
+        // Add duplicates to pending approval queue (for all users, not just non-admins)
+        const pendingEmployees = duplicates.map(dup => ({
+          id: generateId('PEND'),
+          type: 'employee',
+          row: dup.row,
+          data: {
+            empId: data[dup.row - 2]['Emp ID'],
+            name: dup.employee,
+            department: data[dup.row - 2]['Department'] || '',
+            designation: data[dup.row - 2]['Designation'] || '',
+            bankName: data[dup.row - 2]['Bank Name'],
+            ifsc: data[dup.row - 2]['IFSC Code'],
+            accountNo: data[dup.row - 2]['Account Number'],
+            branch: data[dup.row - 2]['Branch'] || '',
+            accountType: data[dup.row - 2]['Account Type'] || 'Saving'
+          },
+          existing: masterData.employees[data[dup.row - 2]['Emp ID']],
+          reason: dup.message,
+          details: dup.details,
+          submittedBy: currentUser.username,
+          submittedByName: currentUser.name,
+          submittedDate: new Date().toISOString(),
+          status: 'pending_review'
+        }));
         
-        // Admin can override - ask for confirmation
-        const duplicateList = duplicates.map(e => 
-          `  • Row ${e.row}: ${e.employee}`
-        ).join('\n');
+        setPendingDuplicates({
+          ...pendingDuplicates,
+          employees: [...pendingDuplicates.employees, ...pendingEmployees]
+        });
         
-        const proceed = window.confirm(
-          `⚠️ ADMIN OVERRIDE REQUIRED\n\n` +
-          `${duplicates.length} duplicate employee(s) detected:\n\n${duplicateList}\n\n` +
-          `Click OK to SKIP duplicates and import the rest.\n` +
-          `Click Cancel to review and fix duplicates first.`
-        );
-        
-        if (!proceed) {
-          showErrors(duplicates.map(e => 
-            `Row ${e.row} (${e.employee}): ${e.message}. ${e.details}`
-          ), 'Duplicate Employees - Import Cancelled');
-          return;
-        }
-        
-        // Log admin override
-        logAudit(auditLogs, setAuditLogs, 'duplicate_employees_skipped', 'employee', null, null, { 
+        // Log to audit
+        logAudit(auditLogs, setAuditLogs, 'duplicate_employees_flagged', 'employee', null, null, {
           count: duplicates.length,
+          imported: importCount,
+          flagged: duplicates.length,
           rows: duplicates.map(e => e.row)
         }, currentUser);
       }
       
-      if (importCount === 0) {
-        showErrors(['No valid employees to import'], 'Employee Import');
-        return;
+      // Always import clean records (even if there are duplicates)
+      if (importCount > 0) {
+        setMasterData({ ...masterData, employees: newEmployees });
       }
       
-      setMasterData({ ...masterData, employees: newEmployees });
       setErrors([]);
       
-      const message = duplicates.length > 0 ? 
-        `✅ Imported ${importCount} employees\n(${duplicates.length} duplicates skipped by admin override)` :
-        `✅ Imported ${importCount} employees successfully!`;
-      alert(message);
+      // Show success message with summary
+      const message = importCount > 0 
+        ? `✅ Imported ${importCount} employee(s) successfully!` 
+        : '✅ Import reviewed!';
+      
+      const duplicateMessage = duplicates.length > 0
+        ? `\n\n⚠️ ${duplicates.length} duplicate(s) flagged for admin review.\nGo to Master Data → Pending Approvals to review.`
+        : '';
+      
+      alert(message + duplicateMessage);
       
       // Log file operation
       logFileOperation(fileLogs, setFileLogs, 'upload', file, {
@@ -1891,6 +2062,149 @@ Return ONLY this JSON:
         {/* Master Data View */}
         {currentView === 'masterdata' && (
           <div className="space-y-6">
+            {/* Pending Approvals Section - Admin Only */}
+            {hasPermission(currentUser, 'approve', 'vendor') && (pendingDuplicates.vendors.length > 0 || pendingDuplicates.employees.length > 0) && (
+              <div className="bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg shadow-lg p-6">
+                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                  <AlertCircle size={28} />
+                  Pending Approvals ({pendingDuplicates.vendors.length + pendingDuplicates.employees.length})
+                </h2>
+                <p className="text-orange-100 mb-6">
+                  Review and approve/reject duplicate entries from bulk imports
+                </p>
+
+                {/* Pending Vendor Duplicates */}
+                {pendingDuplicates.vendors.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-xl font-semibold mb-3">Duplicate Vendors ({pendingDuplicates.vendors.length})</h3>
+                    <div className="space-y-3">
+                      {pendingDuplicates.vendors.map(pending => (
+                        <div key={pending.id} className="bg-white text-gray-900 rounded-lg p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-3">
+                                <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-lg font-semibold text-sm">
+                                  Row {pending.row}
+                                </span>
+                                <span className="font-bold text-lg">{pending.data.name}</span>
+                              </div>
+                              
+                              <div className="grid md:grid-cols-2 gap-4 mb-3">
+                                <div className="bg-red-50 border border-red-200 rounded p-3">
+                                  <p className="text-xs font-semibold text-red-600 mb-2">📍 Existing in Database:</p>
+                                  <p className="text-sm"><strong>Bank:</strong> {pending.existing.bank}</p>
+                                  <p className="text-sm"><strong>IFSC:</strong> {pending.existing.ifsc}</p>
+                                  <p className="text-sm"><strong>Account:</strong> {pending.existing.accountNo}</p>
+                                </div>
+                                <div className="bg-green-50 border border-green-200 rounded p-3">
+                                  <p className="text-xs font-semibold text-green-600 mb-2">📥 New from Import:</p>
+                                  <p className="text-sm"><strong>Bank:</strong> {pending.data.bank}</p>
+                                  <p className="text-sm"><strong>IFSC:</strong> {pending.data.ifsc}</p>
+                                  <p className="text-sm"><strong>Account:</strong> {pending.data.accountNo}</p>
+                                </div>
+                              </div>
+
+                              <div className="bg-gray-50 rounded p-3 mb-3">
+                                <p className="text-xs text-gray-600 mb-1">
+                                  <strong>Submitted by:</strong> {pending.submittedByName} on {new Date(pending.submittedDate).toLocaleString()}
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  <strong>Reason:</strong> {pending.reason}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-3 pt-3 border-t border-gray-200">
+                            <button
+                              onClick={() => approvePendingDuplicate(pending.id, 'vendor')}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold"
+                            >
+                              <CheckCircle size={18} />
+                              Approve & Import
+                            </button>
+                            <button
+                              onClick={() => rejectPendingDuplicate(pending.id, 'vendor')}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold"
+                            >
+                              <Trash2 size={18} />
+                              Reject & Discard
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pending Employee Duplicates */}
+                {pendingDuplicates.employees.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-semibold mb-3">Duplicate Employees ({pendingDuplicates.employees.length})</h3>
+                    <div className="space-y-3">
+                      {pendingDuplicates.employees.map(pending => (
+                        <div key={pending.id} className="bg-white text-gray-900 rounded-lg p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-3">
+                                <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-lg font-semibold text-sm">
+                                  Row {pending.row}
+                                </span>
+                                <span className="font-bold text-lg">{pending.data.empId} - {pending.data.name}</span>
+                              </div>
+                              
+                              <div className="grid md:grid-cols-2 gap-4 mb-3">
+                                <div className="bg-red-50 border border-red-200 rounded p-3">
+                                  <p className="text-xs font-semibold text-red-600 mb-2">📍 Existing in Database:</p>
+                                  <p className="text-sm"><strong>Name:</strong> {pending.existing.name}</p>
+                                  <p className="text-sm"><strong>Dept:</strong> {pending.existing.department || 'N/A'}</p>
+                                  <p className="text-sm"><strong>Bank:</strong> {pending.existing.bankName}</p>
+                                  <p className="text-sm"><strong>Account:</strong> {pending.existing.accountNo}</p>
+                                </div>
+                                <div className="bg-green-50 border border-green-200 rounded p-3">
+                                  <p className="text-xs font-semibold text-green-600 mb-2">📥 New from Import:</p>
+                                  <p className="text-sm"><strong>Name:</strong> {pending.data.name}</p>
+                                  <p className="text-sm"><strong>Dept:</strong> {pending.data.department || 'N/A'}</p>
+                                  <p className="text-sm"><strong>Bank:</strong> {pending.data.bankName}</p>
+                                  <p className="text-sm"><strong>Account:</strong> {pending.data.accountNo}</p>
+                                </div>
+                              </div>
+
+                              <div className="bg-gray-50 rounded p-3 mb-3">
+                                <p className="text-xs text-gray-600 mb-1">
+                                  <strong>Submitted by:</strong> {pending.submittedByName} on {new Date(pending.submittedDate).toLocaleString()}
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  <strong>Reason:</strong> {pending.reason}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-3 pt-3 border-t border-gray-200">
+                            <button
+                              onClick={() => approvePendingDuplicate(pending.id, 'employee')}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold"
+                            >
+                              <CheckCircle size={18} />
+                              Approve & Replace
+                            </button>
+                            <button
+                              onClick={() => rejectPendingDuplicate(pending.id, 'employee')}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold"
+                            >
+                              <Trash2 size={18} />
+                              Reject & Keep Existing
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Employees Section with Bulk Import */}
             <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex items-center justify-between mb-4">
