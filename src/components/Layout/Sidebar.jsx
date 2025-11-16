@@ -1,13 +1,13 @@
 import React from 'react';
 import { Home, Receipt, Database, FileText, Users } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
+import { useExpenseContext } from '../../contexts/ExpenseContext';
 
-const Sidebar = () => {
-  const { currentView, setCurrentView, expenses } = useApp();
+const Sidebar = ({ currentView, setCurrentView }) => {
+  const { pendingExpenses } = useExpenseContext();
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
-    { id: 'expenses', label: 'Expenses', icon: Receipt, badge: expenses.filter(e => e.status === 'pending').length },
+    { id: 'expenses', label: 'Expenses', icon: Receipt, badge: pendingExpenses.length },
     { id: 'masterdata', label: 'Master Data', icon: Database },
     { id: 'payroll', label: 'Payroll', icon: FileText },
     { id: 'audit', label: 'Audit Log', icon: Users }

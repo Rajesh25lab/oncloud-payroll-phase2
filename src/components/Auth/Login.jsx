@@ -1,27 +1,31 @@
 import React, { useState } from 'react';
 import { LogIn } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useData } from '../../contexts/DataContext';
 
 const Login = () => {
-  const { masterData, setCurrentUser, setErrors } = useApp();
+  const { login } = useAuth();
+  const { users } = useData();
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [error, setError] = useState('');
 
   const handleLogin = () => {
     const { username, password } = loginForm;
-    const user = masterData.users[username];
+    const user = users[username];
     
     if (!user) {
-      setErrors(['Invalid username or password']);
+      setError('Invalid username or password');
       return;
     }
     
     if (user.password !== password) {
-      setErrors(['Invalid username or password']);
+      setError('Invalid username or password');
       return;
     }
     
-    setCurrentUser(user);
-    setErrors([]);
+    // Login successful
+    login(user);
+    setError('');
   };
 
   const handleKeyPress = (e) => {
@@ -69,6 +73,12 @@ const Login = () => {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+              <p className="text-sm">{error}</p>
+            </div>
+          )}
 
           <button
             onClick={handleLogin}

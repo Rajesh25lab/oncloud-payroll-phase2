@@ -1,21 +1,33 @@
-import { useApp } from '../contexts/AppContext';
-import { logAudit, requirePermission } from '../utils/enterpriseUtils';
+import { useAuth } from '../contexts/AuthContext';
+import { useExpenseContext } from '../contexts/ExpenseContext';
+import { useAudit } from '../contexts/AuditContext';
+import { requirePermission } from '../utils/enterpriseUtils';
 import { generateId } from '../utils/exportUtils';
 
 export const useExpenses = () => {
+  const { currentUser } = useAuth();
   const { 
-    currentUser, 
-    expenses, 
-    setExpenses, 
-    auditLogs, 
-    setAuditLogs 
-  } = useApp();
+    expenses,
+    pendingExpenses, 
+    approvedExpenses, 
+    rejectedExpenses,
+    dispatch: expenseDispatch 
+  } = useExpenseContext();
+  const { logAudit } = useAudit();
 
   // Add expense
   const addExpense = (expenseData) => {
     if (!requirePermission(currentUser, 'create', 'expense')) {
-      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'expense', null, null, 
-        { action: 'create' }, currentUser, false, 'Insufficient permissions');
+      logAudit({
+        action: 'permission_denied',
+        resource: 'expense',
+        resourceId: null,
+        performedBy: currentUser?.username || 'unknown',
+        performedByName: currentUser?.name || 'Unknown',
+        metadata: { action: 'create' },
+        success: false,
+        errorMessage: 'Insufficient permissions'
+      });
       return { success: false, message: 'Insufficient permissions' };
     }
 
@@ -29,11 +41,18 @@ export const useExpenses = () => {
       submittedDate: new Date().toISOString()
     };
 
-    setExpenses([...expenses, newExpense]);
+    expenseDispatch({ type: 'ADD_EXPENSE', payload: newExpense });
 
     // Log audit
-    logAudit(auditLogs, setAuditLogs, 'expense_created', 'expense', expenseId, 
-      null, newExpense, currentUser);
+    logAudit({
+      action: 'expense_created',
+      resource: 'expense',
+      resourceId: expenseId,
+      performedBy: currentUser.username,
+      performedByName: currentUser.name,
+      metadata: newExpense,
+      success: true
+    });
 
     return { success: true, expense: newExpense };
   };
@@ -41,8 +60,16 @@ export const useExpenses = () => {
   // Approve expense
   const approveExpense = (expenseId) => {
     if (!requirePermission(currentUser, 'approve', 'expense')) {
-      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'expense', expenseId, 
-        null, { action: 'approve' }, currentUser, false, 'Insufficient permissions');
+      logAudit({
+        action: 'permission_denied',
+        resource: 'expense',
+        resourceId: expenseId,
+        performedBy: currentUser?.username || 'unknown',
+        performedByName: currentUser?.name || 'Unknown',
+        metadata: { action: 'approve' },
+        success: false,
+        errorMessage: 'Insufficient permissions'
+      });
       return { success: false, message: 'Insufficient permissions' };
     }
 
@@ -51,28 +78,42 @@ export const useExpenses = () => {
       return { success: false, message: 'Expense not found' };
     }
 
-    const updatedExpense = {
-      ...expense,
-      status: 'approved',
+    const approvalData = {
+      id: expenseId,
       approvedBy: currentUser.username,
       approvedByName: currentUser.name,
       approvedDate: new Date().toISOString()
     };
 
-    setExpenses(expenses.map(e => e.id === expenseId ? updatedExpense : e));
+    expenseDispatch({ type: 'APPROVE_EXPENSE', payload: approvalData });
 
     // Log audit
-    logAudit(auditLogs, setAuditLogs, 'expense_approved', 'expense', expenseId, 
-      expense, updatedExpense, currentUser);
+    logAudit({
+      action: 'expense_approved',
+      resource: 'expense',
+      resourceId: expenseId,
+      performedBy: currentUser.username,
+      performedByName: currentUser.name,
+      metadata: { expense, approval: approvalData },
+      success: true
+    });
 
-    return { success: true, expense: updatedExpense };
+    return { success: true };
   };
 
   // Reject expense
   const rejectExpense = (expenseId) => {
     if (!requirePermission(currentUser, 'approve', 'expense')) {
-      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'expense', expenseId, 
-        null, { action: 'reject' }, currentUser, false, 'Insufficient permissions');
+      logAudit({
+        action: 'permission_denied',
+        resource: 'expense',
+        resourceId: expenseId,
+        performedBy: currentUser?.username || 'unknown',
+        performedByName: currentUser?.name || 'Unknown',
+        metadata: { action: 'reject' },
+        success: false,
+        errorMessage: 'Insufficient permissions'
+      });
       return { success: false, message: 'Insufficient permissions' };
     }
 
@@ -81,28 +122,42 @@ export const useExpenses = () => {
       return { success: false, message: 'Expense not found' };
     }
 
-    const updatedExpense = {
-      ...expense,
-      status: 'rejected',
+    const rejectionData = {
+      id: expenseId,
       rejectedBy: currentUser.username,
       rejectedByName: currentUser.name,
       rejectedDate: new Date().toISOString()
     };
 
-    setExpenses(expenses.map(e => e.id === expenseId ? updatedExpense : e));
+    expenseDispatch({ type: 'REJECT_EXPENSE', payload: rejectionData });
 
     // Log audit
-    logAudit(auditLogs, setAuditLogs, 'expense_rejected', 'expense', expenseId, 
-      expense, updatedExpense, currentUser);
+    logAudit({
+      action: 'expense_rejected',
+      resource: 'expense',
+      resourceId: expenseId,
+      performedBy: currentUser.username,
+      performedByName: currentUser.name,
+      metadata: { expense, rejection: rejectionData },
+      success: true
+    });
 
-    return { success: true, expense: updatedExpense };
+    return { success: true };
   };
 
   // Delete expense
   const deleteExpense = (expenseId) => {
     if (!requirePermission(currentUser, 'delete', 'expense')) {
-      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'expense', expenseId, 
-        null, { action: 'delete' }, currentUser, false, 'Insufficient permissions');
+      logAudit({
+        action: 'permission_denied',
+        resource: 'expense',
+        resourceId: expenseId,
+        performedBy: currentUser?.username || 'unknown',
+        performedByName: currentUser?.name || 'Unknown',
+        metadata: { action: 'delete' },
+        success: false,
+        errorMessage: 'Insufficient permissions'
+      });
       return { success: false, message: 'Insufficient permissions' };
     }
 
@@ -111,20 +166,23 @@ export const useExpenses = () => {
       return { success: false, message: 'Expense not found' };
     }
 
-    setExpenses(expenses.filter(e => e.id !== expenseId));
+    expenseDispatch({ type: 'DELETE_EXPENSE', payload: expenseId });
 
     // Log audit
-    logAudit(auditLogs, setAuditLogs, 'expense_deleted', 'expense', expenseId, 
-      expense, null, currentUser);
+    logAudit({
+      action: 'expense_deleted',
+      resource: 'expense',
+      resourceId: expenseId,
+      performedBy: currentUser.username,
+      performedByName: currentUser.name,
+      metadata: expense,
+      success: true
+    });
 
     return { success: true };
   };
 
   // Get filtered expenses
-  const pendingExpenses = expenses.filter(e => e.status === 'pending');
-  const approvedExpenses = expenses.filter(e => e.status === 'approved');
-  const rejectedExpenses = expenses.filter(e => e.status === 'rejected');
-
   return {
     expenses,
     pendingExpenses,

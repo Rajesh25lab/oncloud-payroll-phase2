@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Plus, Upload, CheckCircle, XCircle, Trash2, Camera, Download } from 'lucide-react';
-import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 import { useExpenses } from '../hooks/useExpenses';
 import { hasPermission } from '../utils/enterpriseUtils';
 
-const Expenses = () => {
-  const { currentUser, masterData, showErrors } = useApp();
+const Expenses = ({ showErrors }) => {
+  const { currentUser } = useAuth();
+  const { employees, vendors } = useData();
   const { 
     pendingExpenses, 
     approvedExpenses, 
@@ -204,7 +206,7 @@ const Expenses = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select Vendor</option>
-                  {Object.values(masterData.vendors).map(v => (
+                  {Object.values(vendors).map(v => (
                     <option key={v.id} value={v.name}>{v.name}</option>
                   ))}
                 </select>
@@ -215,7 +217,7 @@ const Expenses = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select Employee</option>
-                  {Object.values(masterData.employees).map(emp => (
+                  {Object.values(employees).map(emp => (
                     <option key={emp.empId} value={emp.name}>{emp.name}</option>
                   ))}
                 </select>

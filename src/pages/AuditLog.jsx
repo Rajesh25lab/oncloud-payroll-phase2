@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Search, Download, Filter } from 'lucide-react';
-import { useApp } from '../contexts/AppContext';
+import { useAudit } from '../contexts/AuditContext';
 
 const AuditLog = () => {
-  const { auditLogs } = useApp();
+  const { auditLogs } = useAudit();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAction, setFilterAction] = useState('all');
 

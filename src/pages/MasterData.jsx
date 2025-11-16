@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Plus, Upload, Download, Trash2, Edit } from 'lucide-react';
-import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useVendors } from '../hooks/useVendors';
 import { useEmployees } from '../hooks/useEmployees';
 import { hasPermission } from '../utils/enterpriseUtils';
 
-const MasterData = () => {
-  const { currentUser, showErrors } = useApp();
+const MasterData = ({ showErrors }) => {
+  const { currentUser } = useAuth();
   const { vendors, addVendor, updateVendor, deleteVendor } = useVendors();
   const { employees, addEmployee, updateEmployee, deleteEmployee } = useEmployees();
 

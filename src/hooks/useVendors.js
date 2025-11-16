@@ -1,21 +1,27 @@
-import { useApp } from '../contexts/AppContext';
-import { logAudit, requirePermission } from '../utils/enterpriseUtils';
+import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
+import { useAudit } from '../contexts/AuditContext';
+import { requirePermission } from '../utils/enterpriseUtils';
 import { generateId } from '../utils/exportUtils';
 
 export const useVendors = () => {
-  const { 
-    currentUser, 
-    masterData, 
-    setMasterData, 
-    auditLogs, 
-    setAuditLogs 
-  } = useApp();
+  const { currentUser } = useAuth();
+  const { vendors, dispatch: dataDispatch } = useData();
+  const { logAudit } = useAudit();
 
   // Add vendor
   const addVendor = (vendorData) => {
     if (!requirePermission(currentUser, 'create', 'vendor')) {
-      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'vendor', null, null,
-        { action: 'create' }, currentUser, false, 'Insufficient permissions');
+      logAudit({
+        action: 'permission_denied',
+        resource: 'vendor',
+        resourceId: null,
+        performedBy: currentUser?.username || 'unknown',
+        performedByName: currentUser?.name || 'Unknown',
+        metadata: { action: 'create' },
+        success: false,
+        errorMessage: 'Insufficient permissions'
+      });
       return { success: false, message: 'Insufficient permissions' };
     }
 
@@ -26,9 +32,7 @@ export const useVendors = () => {
     }
 
     const vendorId = generateId('VEN');
-    const newVendors = { ...masterData.vendors };
-
-    newVendors[vendorId] = {
+    const newVendor = {
       id: vendorId,
       ...vendorData,
       ifsc: ifsc.toUpperCase(),
@@ -37,20 +41,35 @@ export const useVendors = () => {
       source: 'manual_entry'
     };
 
-    setMasterData({ ...masterData, vendors: newVendors });
+    dataDispatch({ type: 'ADD_VENDOR', payload: newVendor });
 
     // Log audit
-    logAudit(auditLogs, setAuditLogs, 'vendor_created', 'vendor', vendorId,
-      null, newVendors[vendorId], currentUser);
+    logAudit({
+      action: 'vendor_created',
+      resource: 'vendor',
+      resourceId: vendorId,
+      performedBy: currentUser.username,
+      performedByName: currentUser.name,
+      metadata: newVendor,
+      success: true
+    });
 
-    return { success: true, vendor: newVendors[vendorId] };
+    return { success: true, vendor: newVendor };
   };
 
   // Update vendor
   const updateVendor = (vendorId, vendorData) => {
     if (!requirePermission(currentUser, 'edit', 'vendor')) {
-      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'vendor', vendorId, null,
-        { action: 'edit' }, currentUser, false, 'Insufficient permissions');
+      logAudit({
+        action: 'permission_denied',
+        resource: 'vendor',
+        resourceId: vendorId,
+        performedBy: currentUser?.username || 'unknown',
+        performedByName: currentUser?.name || 'Unknown',
+        metadata: { action: 'edit' },
+        success: false,
+        errorMessage: 'Insufficient permissions'
+      });
       return { success: false, message: 'Insufficient permissions' };
     }
 
@@ -60,14 +79,12 @@ export const useVendors = () => {
       return { success: false, message: 'Please fill in all required fields' };
     }
 
-    const oldVendor = masterData.vendors[vendorId];
+    const oldVendor = vendors[vendorId];
     if (!oldVendor) {
       return { success: false, message: 'Vendor not found' };
     }
 
-    const newVendors = { ...masterData.vendors };
-
-    newVendors[vendorId] = {
+    const updatedVendor = {
       ...oldVendor,
       ...vendorData,
       ifsc: ifsc.toUpperCase(),
@@ -75,42 +92,61 @@ export const useVendors = () => {
       modifiedBy: currentUser.username
     };
 
-    setMasterData({ ...masterData, vendors: newVendors });
+    dataDispatch({ type: 'UPDATE_VENDOR', payload: updatedVendor });
 
     // Log audit
-    logAudit(auditLogs, setAuditLogs, 'vendor_updated', 'vendor', vendorId,
-      oldVendor, newVendors[vendorId], currentUser);
+    logAudit({
+      action: 'vendor_updated',
+      resource: 'vendor',
+      resourceId: vendorId,
+      performedBy: currentUser.username,
+      performedByName: currentUser.name,
+      metadata: { old: oldVendor, new: updatedVendor },
+      success: true
+    });
 
-    return { success: true, vendor: newVendors[vendorId] };
+    return { success: true, vendor: updatedVendor };
   };
 
   // Delete vendor
   const deleteVendor = (vendorId) => {
     if (!requirePermission(currentUser, 'delete', 'vendor')) {
-      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'vendor', vendorId, null,
-        { action: 'delete' }, currentUser, false, 'Insufficient permissions');
+      logAudit({
+        action: 'permission_denied',
+        resource: 'vendor',
+        resourceId: vendorId,
+        performedBy: currentUser?.username || 'unknown',
+        performedByName: currentUser?.name || 'Unknown',
+        metadata: { action: 'delete' },
+        success: false,
+        errorMessage: 'Insufficient permissions'
+      });
       return { success: false, message: 'Insufficient permissions' };
     }
 
-    const vendor = masterData.vendors[vendorId];
+    const vendor = vendors[vendorId];
     if (!vendor) {
       return { success: false, message: 'Vendor not found' };
     }
 
-    const newVendors = { ...masterData.vendors };
-    delete newVendors[vendorId];
-
-    setMasterData({ ...masterData, vendors: newVendors });
+    dataDispatch({ type: 'DELETE_VENDOR', payload: vendorId });
 
     // Log audit
-    logAudit(auditLogs, setAuditLogs, 'vendor_deleted', 'vendor', vendorId,
-      vendor, null, currentUser);
+    logAudit({
+      action: 'vendor_deleted',
+      resource: 'vendor',
+      resourceId: vendorId,
+      performedBy: currentUser.username,
+      performedByName: currentUser.name,
+      metadata: vendor,
+      success: true
+    });
 
     return { success: true };
   };
 
   return {
-    vendors: masterData.vendors,
+    vendors,
     addVendor,
     updateVendor,
     deleteVendor

@@ -1,20 +1,26 @@
-import { useApp } from '../contexts/AppContext';
-import { logAudit, requirePermission } from '../utils/enterpriseUtils';
+import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
+import { useAudit } from '../contexts/AuditContext';
+import { requirePermission } from '../utils/enterpriseUtils';
 
 export const useEmployees = () => {
-  const { 
-    currentUser, 
-    masterData, 
-    setMasterData, 
-    auditLogs, 
-    setAuditLogs 
-  } = useApp();
+  const { currentUser } = useAuth();
+  const { employees, dispatch: dataDispatch } = useData();
+  const { logAudit } = useAudit();
 
   // Add employee
   const addEmployee = (employeeData) => {
     if (!requirePermission(currentUser, 'create', 'employee')) {
-      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'employee', null, null,
-        { action: 'create' }, currentUser, false, 'Insufficient permissions');
+      logAudit({
+        action: 'permission_denied',
+        resource: 'employee',
+        resourceId: null,
+        performedBy: currentUser?.username || 'unknown',
+        performedByName: currentUser?.name || 'Unknown',
+        metadata: { action: 'create' },
+        success: false,
+        errorMessage: 'Insufficient permissions'
+      });
       return { success: false, message: 'Insufficient permissions' };
     }
 
@@ -28,13 +34,11 @@ export const useEmployees = () => {
       return { success: false, message: 'Emp ID must start with "E" (example: E0001)' };
     }
 
-    if (masterData.employees[empId]) {
+    if (employees[empId]) {
       return { success: false, message: `Employee ID ${empId} already exists!` };
     }
 
-    const newEmployees = { ...masterData.employees };
-
-    newEmployees[empId] = {
+    const newEmployee = {
       ...employeeData,
       empId,
       ifsc: ifsc.toUpperCase(),
@@ -43,20 +47,35 @@ export const useEmployees = () => {
       source: 'manual_entry'
     };
 
-    setMasterData({ ...masterData, employees: newEmployees });
+    dataDispatch({ type: 'ADD_EMPLOYEE', payload: newEmployee });
 
     // Log audit
-    logAudit(auditLogs, setAuditLogs, 'employee_created', 'employee', empId,
-      null, newEmployees[empId], currentUser);
+    logAudit({
+      action: 'employee_created',
+      resource: 'employee',
+      resourceId: empId,
+      performedBy: currentUser.username,
+      performedByName: currentUser.name,
+      metadata: newEmployee,
+      success: true
+    });
 
-    return { success: true, employee: newEmployees[empId] };
+    return { success: true, employee: newEmployee };
   };
 
   // Update employee
   const updateEmployee = (empId, employeeData) => {
     if (!requirePermission(currentUser, 'edit', 'employee')) {
-      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'employee', empId, null,
-        { action: 'edit' }, currentUser, false, 'Insufficient permissions');
+      logAudit({
+        action: 'permission_denied',
+        resource: 'employee',
+        resourceId: empId,
+        performedBy: currentUser?.username || 'unknown',
+        performedByName: currentUser?.name || 'Unknown',
+        metadata: { action: 'edit' },
+        success: false,
+        errorMessage: 'Insufficient permissions'
+      });
       return { success: false, message: 'Insufficient permissions' };
     }
 
@@ -66,14 +85,12 @@ export const useEmployees = () => {
       return { success: false, message: 'Please fill in all required fields' };
     }
 
-    const oldEmployee = masterData.employees[empId];
+    const oldEmployee = employees[empId];
     if (!oldEmployee) {
       return { success: false, message: 'Employee not found' };
     }
 
-    const newEmployees = { ...masterData.employees };
-
-    newEmployees[empId] = {
+    const updatedEmployee = {
       ...oldEmployee,
       ...employeeData,
       empId, // Keep emp ID unchanged
@@ -82,42 +99,61 @@ export const useEmployees = () => {
       modifiedBy: currentUser.username
     };
 
-    setMasterData({ ...masterData, employees: newEmployees });
+    dataDispatch({ type: 'UPDATE_EMPLOYEE', payload: updatedEmployee });
 
     // Log audit
-    logAudit(auditLogs, setAuditLogs, 'employee_updated', 'employee', empId,
-      oldEmployee, newEmployees[empId], currentUser);
+    logAudit({
+      action: 'employee_updated',
+      resource: 'employee',
+      resourceId: empId,
+      performedBy: currentUser.username,
+      performedByName: currentUser.name,
+      metadata: { old: oldEmployee, new: updatedEmployee },
+      success: true
+    });
 
-    return { success: true, employee: newEmployees[empId] };
+    return { success: true, employee: updatedEmployee };
   };
 
   // Delete employee
   const deleteEmployee = (empId) => {
     if (!requirePermission(currentUser, 'delete', 'employee')) {
-      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'employee', empId, null,
-        { action: 'delete' }, currentUser, false, 'Insufficient permissions');
+      logAudit({
+        action: 'permission_denied',
+        resource: 'employee',
+        resourceId: empId,
+        performedBy: currentUser?.username || 'unknown',
+        performedByName: currentUser?.name || 'Unknown',
+        metadata: { action: 'delete' },
+        success: false,
+        errorMessage: 'Insufficient permissions'
+      });
       return { success: false, message: 'Insufficient permissions' };
     }
 
-    const employee = masterData.employees[empId];
+    const employee = employees[empId];
     if (!employee) {
       return { success: false, message: 'Employee not found' };
     }
 
-    const newEmployees = { ...masterData.employees };
-    delete newEmployees[empId];
-
-    setMasterData({ ...masterData, employees: newEmployees });
+    dataDispatch({ type: 'DELETE_EMPLOYEE', payload: empId });
 
     // Log audit
-    logAudit(auditLogs, setAuditLogs, 'employee_deleted', 'employee', empId,
-      employee, null, currentUser);
+    logAudit({
+      action: 'employee_deleted',
+      resource: 'employee',
+      resourceId: empId,
+      performedBy: currentUser.username,
+      performedByName: currentUser.name,
+      metadata: employee,
+      success: true
+    });
 
     return { success: true };
   };
 
   return {
-    employees: masterData.employees,
+    employees,
     addEmployee,
     updateEmployee,
     deleteEmployee

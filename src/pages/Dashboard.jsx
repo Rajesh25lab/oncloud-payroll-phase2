@@ -1,20 +1,22 @@
 import React from 'react';
 import { Users, Receipt, DollarSign, FileText, TrendingUp, AlertCircle } from 'lucide-react';
-import { useApp } from '../contexts/AppContext';
+import { useData } from '../contexts/DataContext';
+import { useExpenseContext } from '../contexts/ExpenseContext';
 
-const Dashboard = () => {
-  const { masterData, expenses, pendingDuplicates } = useApp();
+const Dashboard = ({ showErrors }) => {
+  const { employees, vendors } = useData();
+  const { expenses, pendingExpenses, approvedExpenses } = useExpenseContext();
 
   const stats = [
     {
       label: 'Total Employees',
-      value: Object.keys(masterData.employees).length,
+      value: Object.keys(employees).length,
       icon: Users,
       color: 'blue'
     },
     {
       label: 'Total Vendors',
-      value: Object.keys(masterData.vendors).length,
+      value: Object.keys(vendors).length,
       icon: FileText,
       color: 'green'
     },
@@ -26,13 +28,13 @@ const Dashboard = () => {
     },
     {
       label: 'Pending Expenses',
-      value: expenses.filter(e => e.status === 'pending').length,
+      value: pendingExpenses.length,
       icon: AlertCircle,
       color: 'orange'
     },
     {
       label: 'Approved Expenses',
-      value: expenses.filter(e => e.status === 'approved').length,
+      value: approvedExpenses.length,
       icon: TrendingUp,
       color: 'emerald'
     },
@@ -44,7 +46,8 @@ const Dashboard = () => {
     }
   ];
 
-  const pendingApprovals = pendingDuplicates.vendors.length + pendingDuplicates.employees.length;
+  // TODO: Add pending duplicates context
+  const pendingApprovals = 0; // Will be implemented in data management phase
 
   return (
     <div className="space-y-6">

@@ -1,15 +1,15 @@
 import React from 'react';
 import { LogOut, User } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { ROLE_NAMES } from '../../utils/enterpriseUtils';
 
-const Header = () => {
-  const { currentUser, setCurrentUser, setCurrentView } = useApp();
+const Header = ({ currentView, setCurrentView }) => {
+  const { currentUser, logout } = useAuth();
 
   const handleLogout = () => {
     const confirmed = window.confirm('Are you sure you want to logout?');
     if (confirmed) {
-      setCurrentUser(null);
+      logout();
       setCurrentView('home');
     }
   };
