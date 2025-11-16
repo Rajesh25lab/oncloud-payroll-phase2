@@ -8,6 +8,8 @@ import { downloadExpenseTemplate, downloadVendorTemplate, downloadEmployeeTempla
 import { saveToStorage, loadFromStorage } from './utils/storage';
 import { CONFIG, INITIAL_VENDORS, DEFAULT_USER } from './config/constants';
 import { logFileOperation, logAudit, hasPermission, requirePermission, searchFiles, searchAuditLogs, exportAuditLogs, getCategoryIcon, getStatusColor, formatFileSize, formatRelativeTime, ROLE_NAMES } from './utils/enterpriseUtils';
+import { sendViaMailto, sendViaWhatsApp } from './utils/emailUtils';
+import ErrorDisplay from './components/ErrorDisplay';
 
 function App() {
   // Authentication state
@@ -87,6 +89,8 @@ function App() {
   });
   
   const [errors, setErrors] = useState([]);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorContext, setErrorContext] = useState('general');
 
   // Initialize app - load from localStorage
   useEffect(() => {
@@ -137,6 +141,13 @@ function App() {
   const addFileLog = (operation, file, metadata = {}) => {
     const log = createFileLog(currentUser, operation, file, metadata);
     setFileLogs(prev => [log, ...prev]); // Newest first
+  };
+
+  // Show errors in robust modal
+  const showErrors = (errorList, context = 'general') => {
+    setErrors(errorList);
+    setErrorContext(context);
+    setShowErrorModal(true);
   };
 
   // Login handler
@@ -426,6 +437,14 @@ function App() {
       setBulkUploadResults(results);
       setErrors([]);
       
+      // Show errors in modal if there are any
+      if (results.errors.length > 0) {
+        const errorMessages = results.errors.map(e => 
+          `Row ${e.row} (${e.data['Payee/Vendor'] || e.data['Payee']}): ${e.errors.join(', ')}`
+        );
+        showErrors(errorMessages, 'Bulk Upload Validation');
+      }
+      
       // Log file upload
       logFileOperation(fileLogs, setFileLogs, 'upload', file, {
         type: 'expense_upload',
@@ -445,7 +464,7 @@ function App() {
       }, currentUser, true, null);
       
     } catch (error) {
-      setErrors([`Error reading file: ${error.message}`]);
+      showErrors([`Error reading file: ${error.message}`], 'File Upload Error');
       
       // Log failed upload
       logFileOperation(fileLogs, setFileLogs, 'upload', file, {
@@ -2371,6 +2390,18 @@ Return ONLY this JSON:
           <p>On Cloud Payroll Phase 2.2 | All data stored locally in browser</p>
         </div>
       </div>
+
+      {/* Error Display Modal */}
+      {showErrorModal && (
+        <ErrorDisplay
+          errors={errors}
+          context={errorContext}
+          onClose={() => {
+            setShowErrorModal(false);
+            setErrors([]);
+          }}
+        />
+      )}
     </div>
   );
 }
