@@ -2700,7 +2700,7 @@ Return ONLY this JSON:
                       </button>
                     </div>
                   </div>
-                ))}
+                )}
               </div>
               
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -2780,7 +2780,7 @@ Return ONLY this JSON:
                         className="hidden"
                       />
                     </label>
-                  ))}
+                  )}
                 </div>
               </div>
               
