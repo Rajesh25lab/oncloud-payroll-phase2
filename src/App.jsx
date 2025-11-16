@@ -56,6 +56,7 @@ function App() {
   
   // Vendor form state
   const [showVendorForm, setShowVendorForm] = useState(false);
+  const [editingVendor, setEditingVendor] = useState(null);
   const [vendorForm, setVendorForm] = useState({
     name: '',
     bank: '',
@@ -67,6 +68,7 @@ function App() {
   
   // Employee form state
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState(null);
   const [employeeForm, setEmployeeForm] = useState({
     empId: '',
     name: '',
@@ -1309,6 +1311,178 @@ function App() {
     alert(`✅ Employee "${name}" added successfully!`);
   };
 
+  // Edit vendor - populate form with existing data
+  const startEditVendor = (vendor) => {
+    setEditingVendor(vendor.id);
+    setVendorForm({
+      name: vendor.name,
+      bank: vendor.bank,
+      ifsc: vendor.ifsc,
+      accountNo: vendor.accountNo,
+      branch: vendor.branch || '',
+      status: vendor.status || 'Active'
+    });
+    setShowVendorForm(true);
+  };
+
+  // Update vendor
+  const updateVendor = () => {
+    if (!requirePermission(currentUser, 'edit', 'vendor')) {
+      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'vendor', editingVendor, null, { action: 'edit' }, currentUser, false, 'Insufficient permissions');
+      return;
+    }
+
+    const { name, bank, ifsc, accountNo } = vendorForm;
+    
+    if (!name || !bank || !ifsc || !accountNo) {
+      setErrors(['Please fill in all required fields (Name, Bank, IFSC, Account)']);
+      return;
+    }
+
+    const oldVendor = masterData.vendors[editingVendor];
+    const newVendors = { ...masterData.vendors };
+    
+    newVendors[editingVendor] = {
+      ...oldVendor,
+      name: name,
+      bank: bank,
+      ifsc: ifsc.toUpperCase(),
+      accountNo: accountNo,
+      branch: vendorForm.branch,
+      status: vendorForm.status,
+      lastModified: new Date().toISOString(),
+      modifiedBy: currentUser.username
+    };
+    
+    setMasterData({ ...masterData, vendors: newVendors });
+    setVendorForm({ name: '', bank: '', ifsc: '', accountNo: '', branch: '', status: 'Active' });
+    setShowVendorForm(false);
+    setEditingVendor(null);
+    setErrors([]);
+    
+    // Log audit
+    logAudit(auditLogs, setAuditLogs, 'vendor_updated', 'vendor', editingVendor, oldVendor, newVendors[editingVendor], currentUser);
+    
+    alert(`✅ Vendor "${name}" updated successfully!`);
+  };
+
+  // Delete vendor
+  const deleteVendor = (vendorId) => {
+    if (!requirePermission(currentUser, 'delete', 'vendor')) {
+      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'vendor', vendorId, null, { action: 'delete' }, currentUser, false, 'Insufficient permissions');
+      return;
+    }
+
+    const vendor = masterData.vendors[vendorId];
+    const confirmed = window.confirm(`Are you sure you want to delete vendor "${vendor.name}"?\n\nThis action cannot be undone.`);
+    
+    if (!confirmed) return;
+
+    const newVendors = { ...masterData.vendors };
+    delete newVendors[vendorId];
+    
+    setMasterData({ ...masterData, vendors: newVendors });
+    
+    // Log audit
+    logAudit(auditLogs, setAuditLogs, 'vendor_deleted', 'vendor', vendorId, vendor, null, currentUser);
+    
+    alert(`✅ Vendor "${vendor.name}" deleted successfully!`);
+  };
+
+  // Edit employee - populate form with existing data
+  const startEditEmployee = (employee) => {
+    setEditingEmployee(employee.empId);
+    setEmployeeForm({
+      empId: employee.empId,
+      name: employee.name,
+      department: employee.department || '',
+      designation: employee.designation || '',
+      bankName: employee.bankName,
+      ifsc: employee.ifsc,
+      accountNo: employee.accountNo,
+      branch: employee.branch || '',
+      accountType: employee.accountType || 'Saving'
+    });
+    setShowEmployeeForm(true);
+  };
+
+  // Update employee
+  const updateEmployee = () => {
+    if (!requirePermission(currentUser, 'edit', 'employee')) {
+      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'employee', editingEmployee, null, { action: 'edit' }, currentUser, false, 'Insufficient permissions');
+      return;
+    }
+
+    const { empId, name, bankName, ifsc, accountNo } = employeeForm;
+    
+    if (!empId || !name || !bankName || !ifsc || !accountNo) {
+      setErrors(['Please fill in all required fields (Emp ID, Name, Bank, IFSC, Account)']);
+      return;
+    }
+
+    const oldEmployee = masterData.employees[editingEmployee];
+    const newEmployees = { ...masterData.employees };
+    
+    newEmployees[editingEmployee] = {
+      ...oldEmployee,
+      name: name,
+      department: employeeForm.department,
+      designation: employeeForm.designation,
+      bankName: bankName,
+      ifsc: ifsc.toUpperCase(),
+      accountNo: accountNo,
+      branch: employeeForm.branch,
+      accountType: employeeForm.accountType,
+      lastModified: new Date().toISOString(),
+      modifiedBy: currentUser.username
+    };
+    
+    setMasterData({ ...masterData, employees: newEmployees });
+    setEmployeeForm({ empId: '', name: '', department: '', designation: '', bankName: '', ifsc: '', accountNo: '', branch: '', accountType: 'Saving' });
+    setShowEmployeeForm(false);
+    setEditingEmployee(null);
+    setErrors([]);
+    
+    // Log audit
+    logAudit(auditLogs, setAuditLogs, 'employee_updated', 'employee', editingEmployee, oldEmployee, newEmployees[editingEmployee], currentUser);
+    
+    alert(`✅ Employee "${name}" updated successfully!`);
+  };
+
+  // Delete employee
+  const deleteEmployee = (empId) => {
+    if (!requirePermission(currentUser, 'delete', 'employee')) {
+      logAudit(auditLogs, setAuditLogs, 'permission_denied', 'employee', empId, null, { action: 'delete' }, currentUser, false, 'Insufficient permissions');
+      return;
+    }
+
+    const employee = masterData.employees[empId];
+    const confirmed = window.confirm(`Are you sure you want to delete employee "${employee.name}" (${empId})?\n\nThis action cannot be undone.`);
+    
+    if (!confirmed) return;
+
+    const newEmployees = { ...masterData.employees };
+    delete newEmployees[empId];
+    
+    setMasterData({ ...masterData, employees: newEmployees });
+    
+    // Log audit
+    logAudit(auditLogs, setAuditLogs, 'employee_deleted', 'employee', empId, employee, null, currentUser);
+    
+    alert(`✅ Employee "${employee.name}" deleted successfully!`);
+  };
+
+  // Cancel editing
+  const cancelEdit = () => {
+    setEditingVendor(null);
+    setEditingEmployee(null);
+    setShowVendorForm(false);
+    setShowEmployeeForm(false);
+    setVendorForm({ name: '', bank: '', ifsc: '', accountNo: '', branch: '', status: 'Active' });
+    setEmployeeForm({ empId: '', name: '', department: '', designation: '', bankName: '', ifsc: '', accountNo: '', branch: '', accountType: 'Saving' });
+    setErrors([]);
+  };
+
   // AI Receipt Reading
   const processReceiptWithAI = async (file) => {
     setReceiptProcessing(true);
@@ -2513,17 +2687,270 @@ Return ONLY this JSON:
                     
                     <div className="flex gap-4">
                       <button
-                        onClick={addVendor}
+                        onClick={editingVendor ? updateVendor : addVendor}
                         className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold"
                       >
-                        ✓ Save Vendor
+                        ✓ {editingVendor ? 'Update Vendor' : 'Save Vendor'}
                       </button>
                       <button
-                        onClick={() => {
-                          setShowVendorForm(false);
-                          setVendorForm({ name: '', bank: '', ifsc: '', accountNo: '', branch: '', status: 'Active' });
-                        }}
+                        onClick={cancelEdit}
                         className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                      >
+                        ✕ Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {Object.values(masterData.vendors).map(vendor => (
+                  <div key={vendor.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="font-semibold">{vendor.name}</p>
+                        <p className="text-xs text-gray-500">{vendor.bank} - {vendor.ifsc} - {vendor.accountNo}</p>
+                        {vendor.branch && <p className="text-xs text-gray-400">Branch: {vendor.branch}</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          vendor.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100'
+                        }`}>
+                          {vendor.status}
+                        </span>
+                        {hasPermission(currentUser, 'edit', 'vendor') && (
+                          <button
+                            onClick={() => startEditVendor(vendor)}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
+                            title="Edit vendor"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        )}
+                        {hasPermission(currentUser, 'delete', 'vendor') && (
+                          <button
+                            onClick={() => deleteVendor(vendor.id)}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded transition"
+                            title="Delete vendor"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Employees Section */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold">Employees ({Object.keys(masterData.employees).length})</h2>
+                <div className="flex gap-2">
+                  {hasPermission(currentUser, 'create', 'employee') && (
+                    <button
+                      onClick={() => {
+                        setEditingEmployee(null);
+                        setShowEmployeeForm(!showEmployeeForm);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                    >
+                      <Plus size={18} />
+                      Add Employee
+                    </button>
+                  )}
+                  <button
+                    onClick={() => downloadEmployeeTemplate()}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    <Download size={18} />
+                    Template
+                  </button>
+                  {hasPermission(currentUser, 'create', 'employee') && (
+                    <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                      <Upload size={18} />
+                      Import
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleEmployeeImport}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+              
+              {showEmployeeForm && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold text-lg mb-4">{editingEmployee ? '✏️ Edit Employee' : '➕ Add New Employee'}</h3>
+                  
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Emp ID <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={employeeForm.empId}
+                        onChange={(e) => setEmployeeForm({...employeeForm, empId: e.target.value})}
+                        placeholder="E0001"
+                        disabled={editingEmployee !== null}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={employeeForm.name}
+                        onChange={(e) => setEmployeeForm({...employeeForm, name: e.target.value})}
+                        placeholder="Employee name"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Department</label>
+                      <input
+                        type="text"
+                        value={employeeForm.department}
+                        onChange={(e) => setEmployeeForm({...employeeForm, department: e.target.value})}
+                        placeholder="Department"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Designation</label>
+                      <input
+                        type="text"
+                        value={employeeForm.designation}
+                        onChange={(e) => setEmployeeForm({...employeeForm, designation: e.target.value})}
+                        placeholder="Designation"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Bank Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={employeeForm.bankName}
+                        onChange={(e) => setEmployeeForm({...employeeForm, bankName: e.target.value})}
+                        placeholder="Bank name"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        IFSC Code <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={employeeForm.ifsc}
+                        onChange={(e) => setEmployeeForm({...employeeForm, ifsc: e.target.value.toUpperCase()})}
+                        placeholder="IFSC"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Account Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={employeeForm.accountNo}
+                        onChange={(e) => setEmployeeForm({...employeeForm, accountNo: e.target.value})}
+                        placeholder="Account number"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Branch</label>
+                      <input
+                        type="text"
+                        value={employeeForm.branch}
+                        onChange={(e) => setEmployeeForm({...employeeForm, branch: e.target.value})}
+                        placeholder="Branch name"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Account Type</label>
+                      <select
+                        value={employeeForm.accountType}
+                        onChange={(e) => setEmployeeForm({...employeeForm, accountType: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="Saving">Saving</option>
+                        <option value="Current">Current</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-4 mt-4">
+                    <button
+                      onClick={editingEmployee ? updateEmployee : addEmployee}
+                      className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold"
+                    >
+                      ✓ {editingEmployee ? 'Update Employee' : 'Save Employee'}
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                    >
+                      ✕ Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {Object.values(masterData.employees).map(employee => (
+                  <div key={employee.empId} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="font-semibold">{employee.empId} - {employee.name}</p>
+                        <p className="text-xs text-gray-500">{employee.department || 'No dept'} {employee.designation ? `- ${employee.designation}` : ''}</p>
+                        <p className="text-xs text-gray-500">{employee.bankName} - {employee.ifsc} - {employee.accountNo}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {hasPermission(currentUser, 'edit', 'employee') && (
+                          <button
+                            onClick={() => startEditEmployee(employee)}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
+                            title="Edit employee"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        )}
+                        {hasPermission(currentUser, 'delete', 'employee') && (
+                          <button
+                            onClick={() => deleteEmployee(employee.empId)}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded transition"
+                            title="Delete employee"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payroll View */}
+        {currentView === 'payroll' && (
                       >
                         Cancel
                       </button>
