@@ -5,6 +5,7 @@ import { Upload, FileText, Download, Home, DollarSign, Users, AlertCircle, Check
 import { findBestMatch, getConfidenceLabel, needsConfirmation } from './utils/fuzzyMatching';
 import { validateExpenseAmount, checkDuplicateExpense, validateBulkRow, formatDate, parseDateToISO } from './utils/validation';
 import { downloadExpenseTemplate, downloadVendorTemplate, downloadEmployeeTemplate, downloadMasterDataLists, exportExpenses, exportMasterData, parseCSVData, generateId, generateJournalNumber } from './utils/exportUtils';
+import { validateCSVStructure, generateErrorReport, validateRowData } from './utils/csvValidator';
 import { saveToStorage, loadFromStorage } from './utils/storage';
 import { CONFIG, INITIAL_VENDORS, DEFAULT_USER } from './config/constants';
 import { logFileOperation, logAudit, hasPermission, requirePermission, searchFiles, searchAuditLogs, exportAuditLogs, getCategoryIcon, getStatusColor, formatFileSize, formatRelativeTime, ROLE_NAMES } from './utils/enterpriseUtils';
@@ -91,6 +92,10 @@ function App() {
   const [errors, setErrors] = useState([]);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorContext, setErrorContext] = useState('general');
+  
+  // Duplicate approval state
+  const [duplicateExpense, setDuplicateExpense] = useState(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   // Initialize app - load from localStorage
   useEffect(() => {
@@ -249,17 +254,47 @@ function App() {
   };
 
   // Add expense
-  const addExpense = () => {
+  const addExpense = (forceAdd = false) => {
     const validation = validateExpenseAmount(expenseForm.type, expenseForm.amount);
     const duplicates = checkDuplicateExpense(expenseForm, expenses);
     
+    // If duplicate found and not admin-approved, show approval modal
+    if (duplicates && duplicates.length > 0 && !forceAdd) {
+      const config = CONFIG.expenseTypes[expenseForm.type];
+      const newExpense = {
+        id: generateId('EXP'),
+        ...expenseForm,
+        crAccount: currentUser.name,
+        drAccount: config.dr,
+        tds: config.tds,
+        tdsRate: config.rate,
+        submittedBy: currentUser.username,
+        submittedByName: currentUser.name,
+        submittedDate: new Date().toISOString(),
+        status: 'pending_duplicate_check',
+        duplicate: {
+          found: duplicates.map(d => ({
+            id: d.id,
+            date: d.date,
+            amount: d.amount,
+            payeeName: d.payeeName,
+            type: d.type
+          }))
+        }
+      };
+      
+      setDuplicateExpense(newExpense);
+      setShowDuplicateModal(true);
+      return;
+    }
+    
     const warnings = [...(validation.warnings || [])];
-    if (duplicates) {
-      warnings.push(`Possible duplicate: Similar expense found on ${duplicates[0].date}`);
+    if (duplicates && forceAdd) {
+      warnings.push(`Admin approved duplicate: Similar expense exists`);
     }
     
     if (!expenseForm.amount || !expenseForm.payeeName) {
-      setErrors(['Please fill in amount and payee name']);
+      showErrors(['Please fill in amount and payee name'], 'Expense Validation');
       return;
     }
     
@@ -281,7 +316,9 @@ function App() {
       submittedByName: currentUser.name,
       submittedDate: new Date().toISOString(),
       status: 'pending',
-      warnings: warnings
+      warnings: warnings,
+      duplicateApproved: forceAdd ? true : false,
+      duplicateApprovedBy: forceAdd ? currentUser.username : null
     };
     
     setExpenses([...expenses, expense]);
@@ -558,6 +595,81 @@ function App() {
     
     try {
       const text = await file.text();
+      
+      // Parse CSV to get headers
+      const lines = text.trim().split('\n');
+      if (lines.length < 2) {
+        showErrors([{
+          message: 'File is empty or has no data rows',
+          details: 'CSV file must have at least a header row and one data row',
+          type: 'critical'
+        }], 'File Empty');
+        return;
+      }
+      
+      // Get headers
+      const headerLine = lines[0];
+      const headers = headerLine.split(',').map(h => h.trim().replace(/"/g, ''));
+      
+      // Validate CSV structure
+      const validation = validateCSVStructure(headers, 'vendor');
+      
+      if (!validation.valid) {
+        // Generate detailed error report
+        const report = generateErrorReport(validation, 'vendor');
+        
+        // Create structured errors for display
+        const structuredErrors = [];
+        
+        // Add main error
+        structuredErrors.push({
+          message: `❌ ${report.summary}`,
+          details: `Your file has ${headers.length} column(s). We need ${validation.template.required.length} required columns.`,
+          type: 'critical'
+        });
+        
+        // Add missing columns
+        if (validation.errors[0]?.missing) {
+          validation.errors[0].missing.forEach(col => {
+            structuredErrors.push({
+              message: `Missing column: "${col}"`,
+              details: `Example value: ${validation.template.example[col]}`,
+              type: 'validation'
+            });
+          });
+        }
+        
+        // Add columns found
+        structuredErrors.push({
+          message: `Columns found in your file (${headers.length}):`,
+          details: headers.join(', ') || 'None',
+          type: 'info'
+        });
+        
+        // Add expected format
+        const expectedHeaders = [...validation.template.required, ...validation.template.optional];
+        structuredErrors.push({
+          message: `Expected columns (${expectedHeaders.length}):`,
+          details: expectedHeaders.map(col => 
+            validation.template.required.includes(col) ? `${col} *` : col
+          ).join(', ') + '\n\n* = Required',
+          type: 'info'
+        });
+        
+        // Add CSV example
+        const csvExample = Object.keys(validation.template.example).join(',') + '\n' +
+                           Object.values(validation.template.example).join(',');
+        structuredErrors.push({
+          message: '📝 Correct CSV Format Example:',
+          details: csvExample,
+          type: 'info'
+        });
+        
+        showErrors(structuredErrors, 'Vendor CSV Structure Error');
+        return;
+      }
+      
+      // If structure is valid, proceed with data parsing
       const data = parseCSVData(text);
       
       if (data.length === 0) {
@@ -575,8 +687,36 @@ function App() {
         const ifsc = row['IFSC Code'];
         const accountNo = row['Account Number'];
         
-        if (!vendorName || !bankName || !ifsc || !accountNo) {
-          errors.push(`Row ${idx + 2}: Missing required fields`);
+        // Check each required field and show which ones are missing
+        const missingFields = [];
+        if (!vendorName) missingFields.push('Vendor Name');
+        if (!bankName) missingFields.push('Bank Name');
+        if (!ifsc) missingFields.push('IFSC Code');
+        if (!accountNo) missingFields.push('Account Number');
+        
+        if (missingFields.length > 0) {
+          errors.push({
+            row: idx + 2,
+            vendor: vendorName || 'Unknown',
+            message: `Missing required fields: ${missingFields.join(', ')}`,
+            details: `Found: ${Object.keys(row).filter(k => row[k]).join(', ') || 'No data'}`
+          });
+          return;
+        }
+        
+        // Check for duplicate vendor name
+        const existingVendor = Object.values(newVendors).find(v => 
+          v.name.toLowerCase() === vendorName.toLowerCase()
+        );
+        
+        if (existingVendor) {
+          errors.push({
+            row: idx + 2,
+            vendor: vendorName,
+            message: `Duplicate vendor: "${vendorName}" already exists`,
+            details: `Existing: ${existingVendor.bank} - ${existingVendor.accountNo}. New: ${bankName} - ${accountNo}`,
+            isDuplicate: true
+          });
           return;
         }
         
@@ -597,7 +737,13 @@ function App() {
       });
       
       if (errors.length > 0) {
-        setErrors(errors);
+        // Show detailed errors with structure
+        const detailedErrors = errors.map(e => ({
+          message: `Row ${e.row} (${e.vendor}): ${e.message}`,
+          details: e.details,
+          type: e.isDuplicate ? 'duplicate' : 'validation'
+        }));
+        showErrors(detailedErrors, 'Vendor Import Validation');
         return;
       }
       
@@ -646,6 +792,81 @@ function App() {
     
     try {
       const text = await file.text();
+      
+      // Parse CSV to get headers
+      const lines = text.trim().split('\n');
+      if (lines.length < 2) {
+        showErrors([{
+          message: 'File is empty or has no data rows',
+          details: 'CSV file must have at least a header row and one data row',
+          type: 'critical'
+        }], 'File Empty');
+        return;
+      }
+      
+      // Get headers
+      const headerLine = lines[0];
+      const headers = headerLine.split(',').map(h => h.trim().replace(/"/g, ''));
+      
+      // Validate CSV structure
+      const validation = validateCSVStructure(headers, 'employee');
+      
+      if (!validation.valid) {
+        // Generate detailed error report
+        const report = generateErrorReport(validation, 'employee');
+        
+        // Create structured errors for display
+        const structuredErrors = [];
+        
+        // Add main error
+        structuredErrors.push({
+          message: `❌ ${report.summary}`,
+          details: `Your file has ${headers.length} column(s). We need ${validation.template.required.length} required columns.`,
+          type: 'critical'
+        });
+        
+        // Add missing columns
+        if (validation.errors[0]?.missing) {
+          validation.errors[0].missing.forEach(col => {
+            structuredErrors.push({
+              message: `Missing column: "${col}"`,
+              details: `Example value: ${validation.template.example[col]}`,
+              type: 'validation'
+            });
+          });
+        }
+        
+        // Add columns found
+        structuredErrors.push({
+          message: `Columns found in your file (${headers.length}):`,
+          details: headers.join(', ') || 'None',
+          type: 'info'
+        });
+        
+        // Add expected format
+        const expectedHeaders = [...validation.template.required, ...validation.template.optional];
+        structuredErrors.push({
+          message: `Expected columns (${expectedHeaders.length}):`,
+          details: expectedHeaders.map(col => 
+            validation.template.required.includes(col) ? `${col} *` : col
+          ).join(', ') + '\n\n* = Required',
+          type: 'info'
+        });
+        
+        // Add CSV example
+        const csvExample = Object.keys(validation.template.example).join(',') + '\n' +
+                           Object.values(validation.template.example).join(',');
+        structuredErrors.push({
+          message: '📝 Correct CSV Format Example:',
+          details: csvExample,
+          type: 'info'
+        });
+        
+        showErrors(structuredErrors, 'Employee CSV Structure Error');
+        return;
+      }
+      
+      // If structure is valid, proceed with data parsing
       const data = parseCSVData(text);
       
       if (data.length === 0) {
@@ -664,13 +885,45 @@ function App() {
         const ifsc = row['IFSC Code'];
         const accountNo = row['Account Number'];
         
-        if (!empId || !name || !bankName || !ifsc || !accountNo) {
-          errors.push(`Row ${idx + 2}: Missing required fields`);
+        // Check each required field and show which ones are missing
+        const missingFields = [];
+        if (!empId) missingFields.push('Emp ID');
+        if (!name) missingFields.push('Name');
+        if (!bankName) missingFields.push('Bank Name');
+        if (!ifsc) missingFields.push('IFSC Code');
+        if (!accountNo) missingFields.push('Account Number');
+        
+        if (missingFields.length > 0) {
+          errors.push({
+            row: idx + 2,
+            employee: name || empId || 'Unknown',
+            message: `Missing required fields: ${missingFields.join(', ')}`,
+            details: `Found: ${Object.keys(row).filter(k => row[k]).join(', ') || 'No data'}`
+          });
           return;
         }
         
         if (!empId.startsWith('E')) {
-          errors.push(`Row ${idx + 2}: Emp ID must start with 'E' (example: E0001)`);
+          errors.push({
+            row: idx + 2,
+            employee: name,
+            message: `Emp ID must start with 'E' (found: ${empId})`,
+            details: 'Example: E0001, E0002, etc.'
+          });
+          return;
+        }
+        
+        // Check for duplicate Emp ID
+        if (newEmployees[empId] || masterData.employees[empId]) {
+          const existing = newEmployees[empId] || masterData.employees[empId];
+          errors.push({
+            row: idx + 2,
+            employee: name,
+            message: `Duplicate Employee ID: "${empId}" already exists`,
+            details: `Existing: ${existing.name} (${existing.department || 'No dept'}). New: ${name}`,
+            isDuplicate: true,
+            requiresApproval: true
+          });
           return;
         }
         
@@ -691,14 +944,70 @@ function App() {
         importCount++;
       });
       
-      if (errors.length > 0) {
-        setErrors(errors);
+      // Separate duplicates from critical errors
+      const duplicates = errors.filter(e => e.isDuplicate);
+      const criticalErrors = errors.filter(e => !e.isDuplicate);
+      
+      if (criticalErrors.length > 0) {
+        const detailedErrors = criticalErrors.map(e => ({
+          message: `Row ${e.row} (${e.employee}): ${e.message}`,
+          details: e.details,
+          type: 'validation'
+        }));
+        showErrors(detailedErrors, 'Employee Import - Fix These Errors');
+        return;
+      }
+      
+      // If only duplicates, handle based on user role
+      if (duplicates.length > 0) {
+        if (currentUser.role !== 'admin') {
+          const detailedErrors = duplicates.map(e => ({
+            message: `Row ${e.row} (${e.employee}): ${e.message}`,
+            details: `${e.details}\n⚠️ ADMIN APPROVAL REQUIRED to override duplicates.`,
+            type: 'duplicate'
+          }));
+          showErrors(detailedErrors, 'Duplicate Employees - Admin Approval Needed');
+          return;
+        }
+        
+        // Admin can override - ask for confirmation
+        const duplicateList = duplicates.map(e => 
+          `  • Row ${e.row}: ${e.employee}`
+        ).join('\n');
+        
+        const proceed = window.confirm(
+          `⚠️ ADMIN OVERRIDE REQUIRED\n\n` +
+          `${duplicates.length} duplicate employee(s) detected:\n\n${duplicateList}\n\n` +
+          `Click OK to SKIP duplicates and import the rest.\n` +
+          `Click Cancel to review and fix duplicates first.`
+        );
+        
+        if (!proceed) {
+          showErrors(duplicates.map(e => 
+            `Row ${e.row} (${e.employee}): ${e.message}. ${e.details}`
+          ), 'Duplicate Employees - Import Cancelled');
+          return;
+        }
+        
+        // Log admin override
+        logAudit(auditLogs, setAuditLogs, 'duplicate_employees_skipped', 'employee', null, null, { 
+          count: duplicates.length,
+          rows: duplicates.map(e => e.row)
+        }, currentUser);
+      }
+      
+      if (importCount === 0) {
+        showErrors(['No valid employees to import'], 'Employee Import');
         return;
       }
       
       setMasterData({ ...masterData, employees: newEmployees });
       setErrors([]);
-      alert(`✅ Imported ${importCount} employees successfully!`);
+      
+      const message = duplicates.length > 0 ? 
+        `✅ Imported ${importCount} employees\n(${duplicates.length} duplicates skipped by admin override)` :
+        `✅ Imported ${importCount} employees successfully!`;
+      alert(message);
       
       // Log file operation
       logFileOperation(fileLogs, setFileLogs, 'upload', file, {
@@ -2390,6 +2699,128 @@ Return ONLY this JSON:
           <p>On Cloud Payroll Phase 2.2 | All data stored locally in browser</p>
         </div>
       </div>
+
+      {/* Duplicate Approval Modal */}
+      {showDuplicateModal && duplicateExpense && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full">
+            <div className="bg-gradient-to-r from-orange-600 to-red-600 text-white p-6">
+              <h2 className="text-2xl font-bold flex items-center gap-3">
+                <AlertCircle size={32} />
+                Duplicate Expense Detected!
+              </h2>
+              <p className="text-orange-100 mt-2">Admin approval required to proceed</p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {/* New Expense */}
+              <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
+                <h3 className="font-bold text-blue-900 mb-3">📝 New Expense (Being Added)</h3>
+                <div className="grid md:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-blue-600">Type</p>
+                    <p className="font-semibold text-blue-900">{duplicateExpense.type}</p>
+                  </div>
+                  <div>
+                    <p className="text-blue-600">Payee</p>
+                    <p className="font-semibold text-blue-900">{duplicateExpense.payeeName}</p>
+                  </div>
+                  <div>
+                    <p className="text-blue-600">Amount</p>
+                    <p className="font-semibold text-blue-900">₹{parseFloat(duplicateExpense.amount).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-blue-600">Date</p>
+                    <p className="font-semibold text-blue-900">{duplicateExpense.date}</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Existing Duplicates */}
+              <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
+                <h3 className="font-bold text-orange-900 mb-3">⚠️ Similar Expenses Found ({duplicateExpense.duplicate.found.length})</h3>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {duplicateExpense.duplicate.found.map((dup, idx) => (
+                    <div key={idx} className="bg-white border border-orange-200 rounded p-3">
+                      <div className="grid md:grid-cols-4 gap-2 text-sm">
+                        <div>
+                          <p className="text-xs text-orange-600">Type</p>
+                          <p className="font-medium">{dup.type}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-orange-600">Payee</p>
+                          <p className="font-medium">{dup.payeeName}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-orange-600">Amount</p>
+                          <p className="font-medium">₹{parseFloat(dup.amount).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-orange-600">Date</p>
+                          <p className="font-medium">{dup.date}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Warning Message */}
+              <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  <strong>⚠️ Warning:</strong> This expense appears to be very similar to {duplicateExpense.duplicate.found.length} existing expense{duplicateExpense.duplicate.found.length > 1 ? 's' : ''}. 
+                  This could be a duplicate entry. Only administrators can approve duplicate expenses.
+                </p>
+              </div>
+              
+              {/* Actions */}
+              <div className="flex gap-3">
+                {hasPermission(currentUser, 'approve', 'expense') ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        addExpense(true); // Force add with approval
+                        setShowDuplicateModal(false);
+                        setDuplicateExpense(null);
+                        logAudit(auditLogs, setAuditLogs, 'duplicate_approved', 'expense', duplicateExpense.id, null, duplicateExpense, currentUser);
+                      }}
+                      className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 rounded-lg hover:from-green-700 hover:to-emerald-700 font-semibold"
+                    >
+                      ✓ Approve & Add Anyway (Admin)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowDuplicateModal(false);
+                        setDuplicateExpense(null);
+                        logAudit(auditLogs, setAuditLogs, 'duplicate_rejected', 'expense', duplicateExpense.id, null, duplicateExpense, currentUser);
+                      }}
+                      className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 text-white py-3 rounded-lg hover:from-red-700 hover:to-pink-700 font-semibold"
+                    >
+                      ✗ Cancel (Don't Add)
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex-1 bg-gray-100 border-2 border-gray-300 rounded-lg p-4 text-center">
+                      <p className="text-gray-700 font-semibold">🔒 Admin Approval Required</p>
+                      <p className="text-sm text-gray-600 mt-1">Only administrators can approve duplicate expenses</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowDuplicateModal(false);
+                        setDuplicateExpense(null);
+                      }}
+                      className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-semibold"
+                    >
+                      Close
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error Display Modal */}
       {showErrorModal && (

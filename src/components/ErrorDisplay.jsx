@@ -40,11 +40,35 @@ const ErrorDisplay = ({ errors, onClose, context = 'general' }) => {
   };
 
   errors.forEach(err => {
-    const errStr = typeof err === 'string' ? err.toLowerCase() : (err.message || err.error || '').toLowerCase();
+    // Handle both string errors and structured error objects
+    let errStr = '';
+    let errObj = null;
     
+    if (typeof err === 'string') {
+      errStr = err.toLowerCase();
+    } else if (typeof err === 'object') {
+      errObj = err;
+      errStr = (err.message || err.error || '').toLowerCase();
+      
+      // Use explicit type if provided
+      if (err.type) {
+        if (err.type === 'duplicate') {
+          categorizedErrors.warning.push(err);
+          return;
+        } else if (err.type === 'validation') {
+          categorizedErrors.validation.push(err);
+          return;
+        } else if (err.type === 'critical') {
+          categorizedErrors.critical.push(err);
+          return;
+        }
+      }
+    }
+    
+    // Auto-categorize based on content
     if (errStr.includes('missing') || errStr.includes('required') || errStr.includes('invalid')) {
       categorizedErrors.validation.push(err);
-    } else if (errStr.includes('warning') || errStr.includes('duplicate') || errStr.includes('possible')) {
+    } else if (errStr.includes('warning') || errStr.includes('duplicate') || errStr.includes('possible') || errStr.includes('approval')) {
       categorizedErrors.warning.push(err);
     } else if (errStr.includes('error') || errStr.includes('failed') || errStr.includes('cannot')) {
       categorizedErrors.critical.push(err);
@@ -122,7 +146,9 @@ const ErrorDisplay = ({ errors, onClose, context = 'general' }) => {
                         {typeof err === 'string' ? err : err.message || err.error || JSON.stringify(err)}
                       </p>
                       {typeof err === 'object' && err.details && (
-                        <p className="text-sm text-red-600 mt-2">{err.details}</p>
+                        <p className="text-sm text-red-600 mt-2 pl-4 border-l-2 border-red-300">
+                          {err.details}
+                        </p>
                       )}
                     </div>
                   ))}
@@ -143,6 +169,11 @@ const ErrorDisplay = ({ errors, onClose, context = 'general' }) => {
                       <p className="text-orange-800 font-medium">
                         {typeof err === 'string' ? err : err.message || err.error || JSON.stringify(err)}
                       </p>
+                      {typeof err === 'object' && err.details && (
+                        <p className="text-sm text-orange-600 mt-2 pl-4 border-l-2 border-orange-300">
+                          {err.details}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -162,6 +193,11 @@ const ErrorDisplay = ({ errors, onClose, context = 'general' }) => {
                       <p className="text-yellow-800">
                         {typeof err === 'string' ? err : err.message || err.error || JSON.stringify(err)}
                       </p>
+                      {typeof err === 'object' && err.details && (
+                        <p className="text-sm text-yellow-600 mt-2 pl-4 border-l-2 border-yellow-300">
+                          {err.details}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
