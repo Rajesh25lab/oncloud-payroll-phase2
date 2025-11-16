@@ -10,6 +10,10 @@ import Sidebar from './components/Layout/Sidebar';
 
 // Pages
 import Dashboard from './pages/Dashboard';
+import Expenses from './pages/Expenses';
+import MasterData from './pages/MasterData';
+import Payroll from './pages/Payroll';
+import AuditLog from './pages/AuditLog';
 
 function App() {
   return (
@@ -62,39 +66,10 @@ function AppContent() {
         
         {/* Route to correct page */}
         {currentView === 'home' && <Dashboard />}
-        
-        {/* Placeholder for pages we haven't extracted yet */}
-        {currentView === 'expenses' && (
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Expenses Page</h2>
-            <p className="text-gray-600 mb-4">This page is being refactored to modular structure.</p>
-            <p className="text-sm text-gray-500">The old App.jsx has been backed up to App.jsx.backup</p>
-          </div>
-        )}
-        
-        {currentView === 'masterdata' && (
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Master Data Page</h2>
-            <p className="text-gray-600 mb-4">This page is being refactored to modular structure.</p>
-            <p className="text-sm text-gray-500">The old App.jsx has been backed up to App.jsx.backup</p>
-          </div>
-        )}
-        
-        {currentView === 'payroll' && (
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Payroll Page</h2>
-            <p className="text-gray-600 mb-4">This page is being refactored to modular structure.</p>
-            <p className="text-sm text-gray-500">The old App.jsx has been backed up to App.jsx.backup</p>
-          </div>
-        )}
-        
-        {currentView === 'audit' && (
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Audit Log Page</h2>
-            <p className="text-gray-600 mb-4">This page is being refactored to modular structure.</p>
-            <p className="text-sm text-gray-500">The old App.jsx has been backed up to App.jsx.backup</p>
-          </div>
-        )}
+        {currentView === 'expenses' && <Expenses />}
+        {currentView === 'masterdata' && <MasterData />}
+        {currentView === 'payroll' && <Payroll />}
+        {currentView === 'audit' && <AuditLog />}
 
         {/* Error Modal */}
         {showErrorModal && (
@@ -110,7 +85,7 @@ function AppContent() {
 
         {/* Footer */}
         <div className="mt-8 text-center text-gray-600 text-sm">
-          <p>On Cloud Payroll v3.0 | Modular Architecture</p>
+          <p>On Cloud Payroll v3.0 | Modular Architecture | All Functional</p>
         </div>
       </div>
     </div>
