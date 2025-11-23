@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { Plus, Upload, Download, Trash2, Edit } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Plus, Upload, Download, Trash2, Edit, Search } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useVendors } from '../hooks/useVendors';
 import { useEmployees } from '../hooks/useEmployees';
+import { usePagination } from '../hooks/usePagination';
+import { useDebounce } from '../hooks/useDebounce';
 import { hasPermission } from '../utils/enterpriseUtils';
+import Paginator from '../components/common/Paginator';
 
 const MasterData = ({ showErrors }) => {
   const { currentUser } = useAuth();
@@ -14,6 +17,60 @@ const MasterData = ({ showErrors }) => {
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
   const [editingVendor, setEditingVendor] = useState(null);
   const [editingEmployee, setEditingEmployee] = useState(null);
+
+  // Search states
+  const [vendorSearch, setVendorSearch] = useState('');
+  const [employeeSearch, setEmployeeSearch] = useState('');
+
+  // Debounced search (only filters after 300ms of no typing)
+  const debouncedVendorSearch = useDebounce(vendorSearch, 300);
+  const debouncedEmployeeSearch = useDebounce(employeeSearch, 300);
+
+  // Filter vendors based on search
+  const filteredVendors = useMemo(() => {
+    const vendorList = Object.values(vendors);
+    if (!debouncedVendorSearch) return vendorList;
+    
+    const searchLower = debouncedVendorSearch.toLowerCase();
+    return vendorList.filter(vendor => 
+      vendor.name.toLowerCase().includes(searchLower) ||
+      vendor.bank.toLowerCase().includes(searchLower) ||
+      vendor.ifsc.toLowerCase().includes(searchLower)
+    );
+  }, [vendors, debouncedVendorSearch]);
+
+  // Filter employees based on search
+  const filteredEmployees = useMemo(() => {
+    const employeeList = Object.values(employees);
+    if (!debouncedEmployeeSearch) return employeeList;
+    
+    const searchLower = debouncedEmployeeSearch.toLowerCase();
+    return employeeList.filter(emp =>
+      emp.name.toLowerCase().includes(searchLower) ||
+      emp.empId.toLowerCase().includes(searchLower) ||
+      (emp.department && emp.department.toLowerCase().includes(searchLower))
+    );
+  }, [employees, debouncedEmployeeSearch]);
+
+  // Pagination for vendors (50 per page)
+  const {
+    paginatedItems: paginatedVendors,
+    currentPage: vendorPage,
+    totalPages: vendorTotalPages,
+    totalItems: vendorTotalItems,
+    itemsPerPage: vendorItemsPerPage,
+    goToPage: goToVendorPage
+  } = usePagination(filteredVendors, 50);
+
+  // Pagination for employees (50 per page)
+  const {
+    paginatedItems: paginatedEmployees,
+    currentPage: employeePage,
+    totalPages: employeeTotalPages,
+    totalItems: employeeTotalItems,
+    itemsPerPage: employeeItemsPerPage,
+    goToPage: goToEmployeePage
+  } = usePagination(filteredEmployees, 50);
 
   const [vendorForm, setVendorForm] = useState({
     name: '', bank: '', ifsc: '', accountNo: '', branch: '', status: 'Active'
@@ -234,44 +291,82 @@ const MasterData = ({ showErrors }) => {
           </div>
         )}
         
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {Object.values(vendors).map(vendor => (
-            <div key={vendor.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <p className="font-semibold">{vendor.name}</p>
-                  <p className="text-xs text-gray-500">{vendor.bank} - {vendor.ifsc} - {vendor.accountNo}</p>
-                  {vendor.branch && <p className="text-xs text-gray-400">Branch: {vendor.branch}</p>}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    vendor.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100'
-                  }`}>
-                    {vendor.status}
-                  </span>
-                  {hasPermission(currentUser, 'edit', 'vendor') && (
-                    <button
-                      onClick={() => handleEditVendor(vendor)}
-                      className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
-                      title="Edit"
-                    >
-                      <Edit size={16} />
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'delete', 'vendor') && (
-                    <button
-                      onClick={() => handleDeleteVendor(vendor.id)}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded transition"
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              value={vendorSearch}
+              onChange={(e) => setVendorSearch(e.target.value)}
+              placeholder="Search vendors by name, bank, or IFSC..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
+          {vendorSearch && (
+            <p className="text-sm text-gray-600 mt-2">
+              Found {filteredVendors.length} vendor{filteredVendors.length !== 1 ? 's' : ''} 
+              {filteredVendors.length < Object.keys(vendors).length && ` (filtered from ${Object.keys(vendors).length} total)`}
+            </p>
+          )}
+        </div>
+
+        {/* Vendor List */}
+        <div className="space-y-2">
+          {paginatedVendors.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              {vendorSearch ? 'No vendors found matching your search' : 'No vendors added yet'}
+            </div>
+          ) : (
+            paginatedVendors.map(vendor => (
+              <div key={vendor.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <p className="font-semibold">{vendor.name}</p>
+                    <p className="text-xs text-gray-500">{vendor.bank} - {vendor.ifsc} - {vendor.accountNo}</p>
+                    {vendor.branch && <p className="text-xs text-gray-400">Branch: {vendor.branch}</p>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      vendor.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100'
+                    }`}>
+                      {vendor.status}
+                    </span>
+                    {hasPermission(currentUser, 'edit', 'vendor') && (
+                      <button
+                        onClick={() => handleEditVendor(vendor)}
+                        className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
+                        title="Edit"
+                      >
+                        <Edit size={16} />
+                      </button>
+                    )}
+                    {hasPermission(currentUser, 'delete', 'vendor') && (
+                      <button
+                        onClick={() => handleDeleteVendor(vendor.id)}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded transition"
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
+
+        {/* Pagination */}
+        {filteredVendors.length > vendorItemsPerPage && (
+          <Paginator
+            currentPage={vendorPage}
+            totalPages={vendorTotalPages}
+            onPageChange={goToVendorPage}
+            itemsPerPage={vendorItemsPerPage}
+            totalItems={vendorTotalItems}
+          />
+        )}
       </div>
 
       {/* Employees Section */}
@@ -417,43 +512,81 @@ const MasterData = ({ showErrors }) => {
           </div>
         )}
         
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {Object.values(employees).map(employee => (
-            <div key={employee.empId} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <p className="font-semibold">{employee.empId} - {employee.name}</p>
-                  <p className="text-xs text-gray-500">
-                    {employee.department || 'No dept'} {employee.designation ? `- ${employee.designation}` : ''}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {employee.bankName} - {employee.ifsc} - {employee.accountNo}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {hasPermission(currentUser, 'edit', 'employee') && (
-                    <button
-                      onClick={() => handleEditEmployee(employee)}
-                      className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
-                      title="Edit"
-                    >
-                      <Edit size={16} />
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'delete', 'employee') && (
-                    <button
-                      onClick={() => handleDeleteEmployee(employee.empId)}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded transition"
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              value={employeeSearch}
+              onChange={(e) => setEmployeeSearch(e.target.value)}
+              placeholder="Search employees by name, ID, or department..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
+          {employeeSearch && (
+            <p className="text-sm text-gray-600 mt-2">
+              Found {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''}
+              {filteredEmployees.length < Object.keys(employees).length && ` (filtered from ${Object.keys(employees).length} total)`}
+            </p>
+          )}
+        </div>
+
+        {/* Employee List */}
+        <div className="space-y-2">
+          {paginatedEmployees.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              {employeeSearch ? 'No employees found matching your search' : 'No employees added yet'}
+            </div>
+          ) : (
+            paginatedEmployees.map(employee => (
+              <div key={employee.empId} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <p className="font-semibold">{employee.empId} - {employee.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {employee.department || 'No dept'} {employee.designation ? `- ${employee.designation}` : ''}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {employee.bankName} - {employee.ifsc} - {employee.accountNo}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {hasPermission(currentUser, 'edit', 'employee') && (
+                      <button
+                        onClick={() => handleEditEmployee(employee)}
+                        className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
+                        title="Edit"
+                      >
+                        <Edit size={16} />
+                      </button>
+                    )}
+                    {hasPermission(currentUser, 'delete', 'employee') && (
+                      <button
+                        onClick={() => handleDeleteEmployee(employee.empId)}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded transition"
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
+
+        {/* Pagination */}
+        {filteredEmployees.length > employeeItemsPerPage && (
+          <Paginator
+            currentPage={employeePage}
+            totalPages={employeeTotalPages}
+            onPageChange={goToEmployeePage}
+            itemsPerPage={employeeItemsPerPage}
+            totalItems={employeeTotalItems}
+          />
+        )}
       </div>
     </div>
   );

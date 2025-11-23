@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { Plus, Upload, CheckCircle, XCircle, Trash2, Camera, Download } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Plus, Upload, CheckCircle, XCircle, Trash2, Camera, Download, Search } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useExpenses } from '../hooks/useExpenses';
+import { usePagination } from '../hooks/usePagination';
+import { useDebounce } from '../hooks/useDebounce';
 import { hasPermission } from '../utils/enterpriseUtils';
+import Paginator from '../components/common/Paginator';
 
 const Expenses = ({ showErrors }) => {
   const { currentUser } = useAuth();
@@ -20,6 +23,53 @@ const Expenses = ({ showErrors }) => {
 
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [receiptProcessing, setReceiptProcessing] = useState(false);
+  
+  // Search states
+  const [pendingSearch, setPendingSearch] = useState('');
+  const [approvedSearch, setApprovedSearch] = useState('');
+  const [rejectedSearch, setRejectedSearch] = useState('');
+
+  // Debounced searches
+  const debouncedPendingSearch = useDebounce(pendingSearch, 300);
+  const debouncedApprovedSearch = useDebounce(approvedSearch, 300);
+  const debouncedRejectedSearch = useDebounce(rejectedSearch, 300);
+
+  // Filter functions
+  const filteredPending = useMemo(() => {
+    if (!debouncedPendingSearch) return pendingExpenses;
+    const searchLower = debouncedPendingSearch.toLowerCase();
+    return pendingExpenses.filter(e => 
+      e.payeeName.toLowerCase().includes(searchLower) ||
+      e.type.toLowerCase().includes(searchLower) ||
+      e.description?.toLowerCase().includes(searchLower)
+    );
+  }, [pendingExpenses, debouncedPendingSearch]);
+
+  const filteredApproved = useMemo(() => {
+    if (!debouncedApprovedSearch) return approvedExpenses;
+    const searchLower = debouncedApprovedSearch.toLowerCase();
+    return approvedExpenses.filter(e =>
+      e.payeeName.toLowerCase().includes(searchLower) ||
+      e.type.toLowerCase().includes(searchLower) ||
+      e.description?.toLowerCase().includes(searchLower)
+    );
+  }, [approvedExpenses, debouncedApprovedSearch]);
+
+  const filteredRejected = useMemo(() => {
+    if (!debouncedRejectedSearch) return rejectedExpenses;
+    const searchLower = debouncedRejectedSearch.toLowerCase();
+    return rejectedExpenses.filter(e =>
+      e.payeeName.toLowerCase().includes(searchLower) ||
+      e.type.toLowerCase().includes(searchLower) ||
+      e.description?.toLowerCase().includes(searchLower)
+    );
+  }, [rejectedExpenses, debouncedRejectedSearch]);
+
+  // Pagination
+  const pendingPagination = usePagination(filteredPending, 20);
+  const approvedPagination = usePagination(filteredApproved, 20);
+  const rejectedPagination = usePagination(filteredRejected, 20);
+
   const [expenseForm, setExpenseForm] = useState({
     date: new Date().toISOString().split('T')[0],
     type: 'Petrol',
@@ -311,23 +361,40 @@ const Expenses = ({ showErrors }) => {
       {/* Pending Expenses */}
       <div className="bg-white rounded-lg shadow-lg p-6">
         <h3 className="text-xl font-bold text-gray-800 mb-4">
-          Pending Expenses ({pendingExpenses.length})
+          Pending Expenses ({filteredPending.length})
         </h3>
         
-        {pendingExpenses.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No pending expenses</p>
+        {/* Search */}
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              value={pendingSearch}
+              onChange={(e) => setPendingSearch(e.target.value)}
+              placeholder="Search pending expenses..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        
+        {filteredPending.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">
+            {pendingSearch ? 'No pending expenses found matching your search' : 'No pending expenses'}
+          </p>
         ) : (
-          <div className="space-y-3">
-            {pendingExpenses.map(expense => (
-              <div key={expense.id} className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-lg font-semibold text-sm">
-                        Pending
-                      </span>
-                      <span className="font-bold text-lg">{expense.type}</span>
-                    </div>
+          <>
+            <div className="space-y-3 mb-4">
+              {pendingPagination.paginatedItems.map(expense => (
+                <div key={expense.id} className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-lg font-semibold text-sm">
+                          Pending
+                        </span>
+                        <span className="font-bold text-lg">{expense.type}</span>
+                      </div>
                     <div className="grid md:grid-cols-3 gap-2 text-sm">
                       <p><strong>Date:</strong> {new Date(expense.date).toLocaleDateString()}</p>
                       <p><strong>Payee:</strong> {expense.payeeName}</p>
@@ -373,20 +440,49 @@ const Expenses = ({ showErrors }) => {
               </div>
             ))}
           </div>
+
+          {/* Pagination */}
+          {filteredPending.length > 20 && (
+            <Paginator
+              currentPage={pendingPagination.currentPage}
+              totalPages={pendingPagination.totalPages}
+              onPageChange={pendingPagination.goToPage}
+              itemsPerPage={pendingPagination.itemsPerPage}
+              totalItems={pendingPagination.totalItems}
+            />
+          )}
+        </>
         )}
       </div>
 
       {/* Approved Expenses */}
       <div className="bg-white rounded-lg shadow-lg p-6">
         <h3 className="text-xl font-bold text-gray-800 mb-4">
-          Approved Expenses ({approvedExpenses.length})
+          Approved Expenses ({filteredApproved.length})
         </h3>
         
-        {approvedExpenses.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No approved expenses</p>
+        {/* Search */}
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              value={approvedSearch}
+              onChange={(e) => setApprovedSearch(e.target.value)}
+              placeholder="Search approved expenses..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        
+        {filteredApproved.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">
+            {approvedSearch ? 'No approved expenses found matching your search' : 'No approved expenses'}
+          </p>
         ) : (
-          <div className="space-y-3">
-            {approvedExpenses.map(expense => (
+          <>
+            <div className="space-y-3 mb-4">
+              {approvedPagination.paginatedItems.map(expense => (
               <div key={expense.id} className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
@@ -408,19 +504,45 @@ const Expenses = ({ showErrors }) => {
                 </div>
               </div>
             ))}
-          </div>
+            </div>
+
+            {/* Pagination */}
+            {filteredApproved.length > 20 && (
+              <Paginator
+                currentPage={approvedPagination.currentPage}
+                totalPages={approvedPagination.totalPages}
+                onPageChange={approvedPagination.goToPage}
+                itemsPerPage={approvedPagination.itemsPerPage}
+                totalItems={approvedPagination.totalItems}
+              />
+            )}
+          </>
         )}
       </div>
 
       {/* Rejected Expenses */}
-      {rejectedExpenses.length > 0 && (
+      {filteredRejected.length > 0 && (
         <div className="bg-white rounded-lg shadow-lg p-6">
           <h3 className="text-xl font-bold text-gray-800 mb-4">
-            Rejected Expenses ({rejectedExpenses.length})
+            Rejected Expenses ({filteredRejected.length})
           </h3>
           
-          <div className="space-y-3">
-            {rejectedExpenses.map(expense => (
+          {/* Search */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                value={rejectedSearch}
+                onChange={(e) => setRejectedSearch(e.target.value)}
+                placeholder="Search rejected expenses..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-3 mb-4">
+            {rejectedPagination.paginatedItems.map(expense => (
               <div key={expense.id} className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
@@ -450,8 +572,18 @@ const Expenses = ({ showErrors }) => {
                   )}
                 </div>
               </div>
-            ))}
-          </div>
+            ))}\n          </div>
+
+          {/* Pagination */}
+          {filteredRejected.length > 20 && (
+            <Paginator
+              currentPage={rejectedPagination.currentPage}
+              totalPages={rejectedPagination.totalPages}
+              onPageChange={rejectedPagination.goToPage}
+              itemsPerPage={rejectedPagination.itemsPerPage}
+              totalItems={rejectedPagination.totalItems}
+            />
+          )}
         </div>
       )}
     </div>
